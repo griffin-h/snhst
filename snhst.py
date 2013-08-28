@@ -13,11 +13,12 @@ from drizzlepac.util import getDefaultConfigObj
 from astLib.astWCS import WCS
 from stsci import tools
 from numpy import cos,sin,array,pi
+import readcol
 
 def drizzle(output_name,input_files='',ref='',template_image='',
             instrument='wfc3_ir',drizra=0.0,drizdec=0.0,pix_scale=0.0,drizrot=0.0,nx=0,ny=0,
             pix_frac=1.0,acs_cte=False,do_destripe=True,
-            clean = True, find_shifts = True,in_mem =False,scale = 1.0, rot = 0.0,rashift=0.0,decshift =0.0):
+            clean = True, find_shifts = True,scale = 1.0, rot = 0.0,rashift=0.0,decshift =0.0):
     
     this_dir=os.getcwd()+'/'
     if ref=='': ref=this_dir
@@ -451,7 +452,7 @@ def drizzle(output_name,input_files='',ref='',template_image='',
                 'stepsize = 10# Step size for drizzle coordinate computation\n',
                 'resetbits = 4096# Bit values to reset in all input DQ arrays\n' #reset all of the 4096 flags from multidrizzle for the HST pipeline,
                 'num_cores = None# Max CPU cores to use (n<2 disables, None = auto-decide)\n',
-                'in_memory = '+str(in_mem)+'# Process everything in memory to minimize disk I/O?\n',
+                'in_memory = False# Process everything in memory to minimize disk I/O?\n',#In principle this would be nice, but it doesn't update the input flt files with the new DQ mask if set to True
                 '\n',
                 '[STATE OF INPUT FILES]\n',
                 'restore = False# Copy input files FROM archive directory for processing?\n',
