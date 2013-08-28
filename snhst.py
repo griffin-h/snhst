@@ -195,47 +195,49 @@ def drizzle(output_name,input_files='',ref='',template_image='',
         #find the midpoint of the cr vals for the different chips
         if instrument in ['wfc3_ir','acs_hrc']:
             hdr=hdulist['SCI'].header
-            imwcs = WCS(hdr)
+            imwcs = WCS(hdr,mode='pyfits')
             drizra,drizdec = imwcs.getCentreWCSCoords() 
 
         elif instrument in ['acs','wfc3_uvis']:
             hdr=hdulist['SCI',1].header
-            imwcs = WCS(hdr)
+            imwcs = WCS(hdr,mode='pyfits')
             drizra,drizdec = imwcs.getCentreWCSCoords() 
 
             hdr=hdulist['SCI',2].header
-            imwcs = WCS(hdr)
+            imwcs = WCS(hdr,mode='pyfits')
             drizra +=imwcs.getCentreWCSCoords()[0] 
             drizdec += imwcs.getCentreWCSCoords()[1]
             drizra /= 2.0
             drizdec /= 2.0
         elif instrument=='wfpc2_wf':
             hdr=hdulist['SCI',2].header
-            imwcs = WCS(hdr)
+            imwcs = WCS(hdr,mode='pyfits')
             drizra,drizdec = imwcs.getCentreWCSCoords() 
             
             hdr=hdulist['SCI',3].header
-            imwcs = WCS(hdr)
+            imwcs = WCS(hdr,mode='pyfits')
             drizra +=imwcs.getCentreWCSCoords()[0] 
             drizdec += imwcs.getCentreWCSCoords()[1]
             
             hdr=hdulist['SCI',4].header
-            imwcs = WCS(hdr)
+            imwcs = WCS(hdr,mode='pyfits')
             drizra +=imwcs.getCentreWCSCoords()[0] 
             drizdec += imwcs.getCentreWCSCoords()[1]
             drizra /=   3.0
             drizdec /= 3.0
         elif instrument=='wfpc2_pc':
             hdr=hdulist['SCI',1].header
-            imwcs = WCS(hdr)
+            imwcs = WCS(hdr,mode='pyfits')
             drizra,drizdec = imwcs.getCentreWCSCoords() 
 
         hdulist.close()
         
     if template_image!='':
+        #Copy the template file here as to not run into file collisions
         os.system('cp -f '+template_image+' ./template.fits')
         template_image = 'template.fits'
         hdulist=pyfits.open('template.fits')
+        #Get the WCS parameters for the template image
         twcs = WCS('template.fits')
         hdr=hdulist[0].header
         nx =int(hdr['naxis1'])
@@ -250,6 +252,7 @@ def drizzle(output_name,input_files='',ref='',template_image='',
         weight_hdr=hdr.copy()
         hdulist.close()
         
+        #Make a template weight mask for sextractor etc.
         weight_mask[weight_mask != 0.0] = 1.0
         new_hdu=pyfits.PrimaryHDU(weight_mask,weight_hdr)
         new_hdulist=pyfits.HDUList([new_hdu])
@@ -257,6 +260,7 @@ def drizzle(output_name,input_files='',ref='',template_image='',
         new_hdulist.close()
         
     #if ACS data do a cte correction a destripe the image
+    #We no longer do this by default because we default to using the flc files which are already corrected.
     if instrument=='acs' and acs_cte:
         for i,img in enumerate(imgs_full):
             #turn cte into a function use memory properly
@@ -264,6 +268,12 @@ def drizzle(output_name,input_files='',ref='',template_image='',
     
     wcskey = ''
     if find_shifts:
+        #This wcskey is created in the header of the flt files.
+        #While this works fine on clean flt files, you can not rerun tweakreg on flt files
+        #It will fail. Of course it is not just written as a headerlet that is easy to delete.
+        #It is written as several WCS keywords in the header. 
+        #We should add a step to look for the TWEAK wcskey and remove them if they exist.
+        
         wcskey='TWEAK'
         #Run tweakreg on the flt frames to get the relative shifts between frames
         imfind_lines = ['_task_name_ = imagefindpars# \n',
@@ -752,9 +762,9 @@ def sextractor(image,thresh=2.5,minarea=4):
     lines=[]
     for i,thisx in enumerate(x):
         lines.append('circle '+thisx+' '+y[i]+' 10.0 \n')
-    file = open(image+'.reg', 'w')
-    file.writelines(lines)
-    file.close()
+    f = open(image+'.reg', 'w')
+    f.writelines(lines)
+    f.close()
 
 
 def run(output_name,input_files='',ref='',sub_template='',phot_sub_template='',image_instrument='wfc3_ir',templ_instrument='wfc3_ir',wcs_template='',do_cte=False,ra=0.0,dec=0.0,pixel_scale=0.0,this_nx=0,this_ny=0,do_drizzle=True,this_pix_frac=1.0):
