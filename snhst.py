@@ -12,8 +12,42 @@ from drizzlepac import tweakreg, astrodrizzle
 from drizzlepac.util import getDefaultConfigObj
 from astLib.astWCS import WCS
 from stsci import tools
-from numpy import cos,sin,array,pi
+from numpy import cos,sin,array,pi,arctan
+from numpy.linalg import norm
 import readcol
+from pyfits import getval
+
+def coarsealign(x1s, x2s,s_img, x1t, x2t,t_img):
+    #Takes the position of two stars on two different images and calculates the values
+    #needed for the shift file. s = source, t = template
+    twcs = WCS(t_img)
+    swcs = WCS(s_img)
+    
+    x1s = array(swcs.pix2wcs(x1s[0],x1s[1]))
+    x2s  =array(swcs.pix2wcs(x2s[0],x2s[1]))
+    x1t = array(twcs.pix2wcs(x1t[0],x1t[1]))
+    x2t = array(twcs.pix2wcs(x2t[0],x2t[1]))
+    crval_s = array([float(getval(s_img,'CRVAL1')),float(getval(s_img,'CRVAL2'))])
+    crval_t = array([float(getval(t_img,'CRVAL1')),float(getval(t_img,'CRVAL2'))])
+    
+    x1s -= crval_s
+    x2s -= crval_s
+    x1t -= crval_t
+    x2t -= crval_t
+    
+    dxt = x2t - x1t
+    dxs = x2s - x1s
+    
+    a = norm(dxt)/norm(dxs)
+    
+    dxtdyt = dxt[0]/dxt[1]
+    th = arctan((dxtdyt*dxs[1] - dxs[0])/(dxs[1] + dxtdyt * dxs[0]))
+    
+    x0 = x1t[0] - a*(cos(th)* x1s[0] + sin(th)*x1s[1])
+    y0 = x1t[1] - a*(-sin(th)*x1s[0] + cos(th)*x1s[1])
+
+    #This follows the same convention as the overall wcs params in snhst.drizzle
+    return x0,y0,th*180.0/pi,a
 
 def drizzle(output_name,input_files='',ref='',template_image='',
             instrument='wfc3_ir',drizra=0.0,drizdec=0.0,pix_scale=0.0,drizrot=0.0,nx=0,ny=0,
