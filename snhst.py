@@ -932,10 +932,10 @@ def cal_wfc3ir(obsdate,ref='/scratch/snmct/ref/wfc3_ir/',mtab='/scratch/snmct/re
         os.system('rm -rf *_asn.fits')
         
         for f in raw_files:
-            print(file)
+            print(f)
             #Get the start time for each of the exposures and strip off the _raw.fits from the filename
-            expstart=float(pyfits.getval(file,'EXPSTART'))
-            imgs.append((file[:-9],this_filter,this_date,expstart,this_obj))
+            expstart=float(pyfits.getval(f,'EXPSTART'))
+            imgs.append((f[:-9],this_filter,this_date,expstart,this_obj))
         
             #run calwfc3 on the observation data
             pyfits.setval(f,'PHOTCORR',value='OMIT')
@@ -1006,7 +1006,7 @@ def cal_wfc3ir(obsdate,ref='/scratch/snmct/ref/wfc3_ir/',mtab='/scratch/snmct/re
         hdulist.close()
     #endfor
 
-def make_registration_template(output_name,image_to_register='',this_ref='',input_template_files='',image_instrument='wfc3_ir',template_instrument='wfc3_ir',ra=0.0,dec=0.0, this_user_shift_file=''):
+def make_registration_template(output_name,image_to_register='',this_ref='',input_template_files='',image_instrument='wfc3_ir',template_instrument='wfc3_ir',ra=0.0,dec=0.0):
     #image to register is the flt file that you would like to register: either this or ra and dec must be given
     if image_to_register=='' and ra==0.0 and dec==0.0:
         print('You must give the path to the image to register or the ra and dec to center on.')
@@ -1067,7 +1067,7 @@ def make_registration_template(output_name,image_to_register='',this_ref='',inpu
         #run drizzle with the parameters from the image instrument instead of the other way around
         drizzle(output_name,input_files=input_template_files,ref=this_ref,template_image='',
                 instrument=template_instrument,drizra=ra,drizdec=dec,
-                user_shift_file=this_user_shift_file,pix_scale=this_pix_scale,nx=this_nx,ny=this_ny,acs_cte=False)
+               pix_scale=this_pix_scale,nx=this_nx,ny=this_ny,acs_cte=False)
 
 def run_cte(img,img_base,do_destripe=True):
     #put this into a function to make sure all the memory gets released
