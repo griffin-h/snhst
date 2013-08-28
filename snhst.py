@@ -764,9 +764,10 @@ def run(output_name,input_files='',ref='',sub_template='',phot_sub_template='',i
             sextractor(image=output_name+'_lacosmic_imarithsub.fits')
             sextractor(image=output_name+'_lacosmic_sub_inv.fits')
             sextractor(image=output_name+'_lacosmic_imarithsub_inv.fits')
-
-        subtract(image=output_name+'_drz_sci.fits', template_image=phot_sub_template, output_image=output_name+'_phot', instrument=image_instrument, template_instrument=templ_instrument,imarith=False)
-        subtract(image=output_name+'_drz_sci.fits', template_image=phot_sub_template, output_image=output_name+'_phot', instrument=image_instrument, template_instrument=templ_instrument,imarith=True)
+        if image_instrument =='acs' : drzstr = '_drc'
+        else: drzstr = '_drz'   
+        subtract(image=output_name+drzstr+'_sci.fits', template_image=phot_sub_template, output_image=output_name+'_phot', instrument=image_instrument, template_instrument=templ_instrument,imarith=False)
+        subtract(image=output_name+drzstr+'_sci.fits', template_image=phot_sub_template, output_image=output_name+'_phot', instrument=image_instrument, template_instrument=templ_instrument,imarith=True)
         sextractor(image=output_name+'_phot_sub.fits')
         sextractor(image=output_name+'_phot_imarithsub.fits')
         sextractor(image=output_name+'_phot_sub_inv.fits')
