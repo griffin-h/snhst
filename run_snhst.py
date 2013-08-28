@@ -81,7 +81,7 @@ if __name__ == '__main__':
     os.system('cp -r raw_'+filt+'_'+obsdate+' '+filt+'_'+obsdate)
     os.system('tar -czvf raw_'+filt+'_'+obsdate+'.tar.gz raw_'+filt+'_'+obsdate)
     os.system('rm -rf raw_'+filt+'_'+obsdate)
-    os.chdir(filter+'_'+obsdate)
+    os.chdir(filt+'_'+obsdate)
 
     if instrument=='wfc3_ir':
         image_ext='_drz_sci.fits'
@@ -92,8 +92,8 @@ if __name__ == '__main__':
         sub_templ_file=''
         phot_sub_templ_file=''
     elif template_file=='':
-        sub_templ_file=this_dir+'/'+target+'/'+instrument+'/'+filter+'_'+template_date+'/'+filter+'_'+template_date+image_ext
-        phot_sub_templ_file=this_dir +'/'+target+'/'+instrument+'/'+filter+'_'+template_date+'/'+filter+'_'+template_date+'_drz_sci.fits'
+        sub_templ_file=this_dir+'/'+target+'/'+instrument+'/'+filt+'_'+template_date+'/'+filt+'_'+template_date+image_ext
+        phot_sub_templ_file=this_dir +'/'+target+'/'+instrument+'/'+filt+'_'+template_date+'/'+filt+'_'+template_date+'_drz_sci.fits'
     else:
         sub_templ_file=template_file
         phot_sub_templ_file=template_file
