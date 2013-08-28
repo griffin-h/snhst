@@ -6,7 +6,7 @@ Created on Dec 17, 2010
 import os
 from pyraf import iraf
 from iraf import stsdas,dither,images,hst_calib,wfc3
-import multidrizzle, math, readcol, pyfits,acstools,numpy,lacosmicx
+import pyfits,acstools,numpy,lacosmicx
 import drizzlepac
 from drizzlepac import tweakreg, astrodrizzle
 from drizzlepac.util import getDefaultConfigObj
@@ -17,7 +17,7 @@ from numpy import cos,sin,array,pi
 def drizzle(output_name,input_files='',ref='',template_image='',
             instrument='wfc3_ir',drizra=0.0,drizdec=0.0,pix_scale=0.0,drizrot=0.0,nx=0,ny=0,
             pix_frac=1.0,acs_cte=False,do_destripe=True,
-            clean = True, find_shifts = True,in_mem =True,scale = 1.0, rot = 0.0,rashift=0.0,decshift =0.0):
+            clean = True, find_shifts = True,in_mem =False,scale = 1.0, rot = 0.0,rashift=0.0,decshift =0.0):
     
     this_dir=os.getcwd()+'/'
     if ref=='': ref=this_dir
