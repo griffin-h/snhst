@@ -6,7 +6,7 @@ if __name__ == '__main__':
     if sys.version_info[1] >= 7 or sys.version_info[0] > 2:
         # Parse the input arguments. You have to use a different package based on the python version: What a pain!
         import argparse
-        print('Usage: run_clash.py target instrument filter obsdate wcs_template template_date template_file template_instrument')
+        print('Usage: run_snhst.py target instrument filter obsdate wcs_template template_date template_file template_instrument')
         print('Template instrument defaults to image_instrument.')
 
         parser = argparse.ArgumentParser(description='Run the pipeline on CLASH data.')
@@ -41,7 +41,7 @@ if __name__ == '__main__':
         (options, args) = parser.parse_args()
         
         if len(args) < 4: 
-            print('Usage: run_clash.py target instrument filter obsdate wcs_template template_date template_file template_instrument')
+            print('Usage: run_snhst.py target instrument filter obsdate wcs_template template_date template_file template_instrument')
             sys.exit(1)
             #initialize some default variables
         template_date=''
