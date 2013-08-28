@@ -20,8 +20,7 @@ def drizzle(output_name,input_files='',ref='',template_image='',
             clean = True, find_shifts = True,in_mem =True,scale = 1.0, rot = 0.0,rashift=0.0,decshift =0.0):
     
     this_dir=os.getcwd()+'/'
-    if ref=='':
-        ref=this_dir
+    if ref=='': ref=this_dir
     #use the multdrizzle parameters for the correct instrument
     #pars=[group,proc_unit,pix_scale,pix_frac,sep_bits,final_bits]
     #nchip = number of chips on the instrument (used to get the right flt or c0m extensions)
@@ -44,8 +43,7 @@ def drizzle(output_name,input_files='',ref='',template_image='',
             ny=4550
             # native_pix_scale=0.04
         if template_image =='' and pix_scale == 0.0: pix_scale=0.04
-        if input_files=='':
-            input_files='*_flt.fits'
+        if input_files=='': input_files='*_flt.fits'
    
     elif instrument == 'acs':
         [grp,units,sep_bits,final_bits]=['','electrons',256,256]
@@ -65,9 +63,7 @@ def drizzle(output_name,input_files='',ref='',template_image='',
             ny=5200
             # native_pix_scale=0.0495
         if template_image =='' and pix_scale == 0.0: pix_scale=0.05
-            
-        if input_files=='':
-            input_files='*_flc.fits'
+        if input_files=='': input_files='*_flc.fits'
     
     elif instrument == 'acs_hrc':
         [grp,units,sep_bits,final_bits]=['','electrons',256,256]
@@ -87,9 +83,7 @@ def drizzle(output_name,input_files='',ref='',template_image='',
             ny=1400
             # native_pix_scale=0.0495
         if template_image =='' and pix_scale == 0.0: pix_scale=0.025
-            
-        if input_files=='':
-            input_files='*_flt.fits'
+        if input_files=='': input_files='*_flt.fits'
             
     elif instrument=='wfc3_ir' :
         [grp,units,sep_bits,final_bits]=['','electrons',512+256,512+256]
@@ -103,9 +97,7 @@ def drizzle(output_name,input_files='',ref='',template_image='',
             #native_pix_scale=0.1282
         
         if template_image =='' and pix_scale == 0.0: pix_scale=0.09
-            
-        if input_files=='':
-            input_files='*_flt.fits'  
+        if input_files=='': input_files='*_flt.fits'  
             
     elif instrument == 'stis':
         [grp,units,sep_bits,final_bits]=['','electrons',256,256]
@@ -124,8 +116,7 @@ def drizzle(output_name,input_files='',ref='',template_image='',
             ny=1400
             # native_pix_scale=0.04
         if template_image =='' and pix_scale == 0.0: pix_scale=0.0507
-        if input_files=='':
-            input_files='*_flt.fits'
+        if input_files=='':input_files='*_flt.fits'
 
     elif instrument=='wfpc2_pc' :    
         [grp,units,sep_bits,final_bits]=['1','electrons',8,8]
@@ -145,10 +136,9 @@ def drizzle(output_name,input_files='',ref='',template_image='',
             nx=1000
             ny=1000
             #native_pix_scale=0.046
-        if template_image =='' and pix_scale == 0.0: pix_scale=0.046
-            
-        if input_files=='':
-            input_files='*_c0m.fits'
+        if template_image =='' and pix_scale == 0.0: pix_scale=0.046    
+        if input_files=='':input_files='*_c0m.fits'
+        
     elif instrument=='wfpc2_all' :    
         [grp,units,sep_bits,final_bits]=['','electrons',8,8]
         os.environ['uref']=ref
@@ -164,8 +154,7 @@ def drizzle(output_name,input_files='',ref='',template_image='',
         obj_lim=6.0
         
         #you must manually set the pix scale, and nx and ny, or have a wcs_template image
-        if input_files=='':
-            input_files='*_c0m.fits'  
+        if input_files=='': input_files='*_c0m.fits'  
            
     elif instrument=='wfpc2_wf' :
         [grp,units,sep_bits,final_bits]=['2,3,4','electrons',8,8]
@@ -187,8 +176,7 @@ def drizzle(output_name,input_files='',ref='',template_image='',
             #native_pix_scale=0.0996
         if template_image =='' and pix_scale == 0.0: pix_scale=0.0996
             
-        if input_files=='':
-            input_files='*_c0m.fits'  
+        if input_files=='': input_files='*_c0m.fits'  
         
     #convert the input list for multidrizzle into a useable list of images
     imgs = []
@@ -199,14 +187,12 @@ def drizzle(output_name,input_files='',ref='',template_image='',
         this_img= img[:-9]
         if instrument in ['wfpc2_pc' ,'wfpc2_wf' ,'wfpc2_all']:imgs.append(this_img+'_c0m')
         else:imgs.append(this_img)
-        #reset all of the 4096 flags from multidrizzle for the HST pipeline
-   
 
     #the ra and the dec are the desired ra and dec for the center of the frame
     if drizra==0.0 and drizdec == 0.0:
         #grab the target ra and dec from the header of the first file
         hdulist=pyfits.open(imgs_full[0])
-        
+        twcs = WCS('template.fits')
         #find the midpoint of the cr vals for the different chips
         if instrument in ['wfc3_ir','acs_hrc']:
             hdr=hdulist['SCI'].header
@@ -245,8 +231,8 @@ def drizzle(output_name,input_files='',ref='',template_image='',
         hdulist=pyfits.open('template.fits')
         twcs = WCS('template.fits')
         hdr=hdulist[0].header
-        nx =float(hdr['naxis1'])
-        ny =float(hdr['naxis2'])
+        nx =int(hdr['naxis1'])
+        ny =int(hdr['naxis2'])
 
         drizra,drizdec = twcs.getCentreWCSCoords()
 
@@ -446,7 +432,7 @@ def drizzle(output_name,input_files='',ref='',template_image='',
                 'build = False# Create multi-extension output file for final drizzle?\n',
                 'crbit = 4096# Bit value for CR ident. in DQ array\n',
                 'stepsize = 10# Step size for drizzle coordinate computation\n',
-                'resetbits = 4096# Bit values to reset in all input DQ arrays\n',
+                'resetbits = 4096# Bit values to reset in all input DQ arrays\n' #reset all of the 4096 flags from multidrizzle for the HST pipeline,
                 'num_cores = None# Max CPU cores to use (n<2 disables, None = auto-decide)\n',
                 'in_memory = '+str(in_mem)+'# Process everything in memory to minimize disk I/O?\n',
                 '\n',
