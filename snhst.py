@@ -310,7 +310,7 @@ def drizzle(output_name,input_files='',ref='',template_image='',
                                 'input = '+input_files+'# Input files (name, suffix, or @list)\n',
                                 'refimage = "%s"# Filename of reference image\n'%template_image,
                                 'exclusions = ""# Filename for source exclusions catalogs\n',
-                                'updatewcs = True# Update WCS keywords of input images?\n',
+                                'updatewcs = False# Update WCS keywords of input images?\n',
                                 'writecat = False# Write out source catalogs?\n',
                                 'clean = True# Remove intermediate files?\n',
                                 'verbose = False# Print extra messages during processing?\n',
@@ -822,7 +822,7 @@ def cal_wfc3ir(obsdate,ref='/scratch/snmct/ref/wfc3_ir/',mtab='/scratch/snmct/re
     os.system('find '+ref+'dark/ -mindepth 1 -not -name "i*.fits" -name "*.fits" -exec mv -f {} '+ref+' \;')
     
     #vet out the darks that don't meet our criteria for "guard dark"
-    imgs_raw,alist=tools.parseinput.parseinput(ref+'dark/*raw.fits')
+    imgs_raw=tools.parseinput.parseinput(ref+'dark/*raw.fits')[0]
     
     darks=[]
    
@@ -848,27 +848,27 @@ def cal_wfc3ir(obsdate,ref='/scratch/snmct/ref/wfc3_ir/',mtab='/scratch/snmct/re
     date_filt = []
     #get object name
     cmd = "find */wfc3_ir -name 'raw_*"+obsdate+"*' -type d"
-    for file in os.popen(cmd).readlines():
+    for f in os.popen(cmd).readlines():
         #get just the folder name
-        str_arr=file.split('/')
+        str_arr=f.split('/')
         #get the obsdate and the filter, instrument=wfc3_ir, and the start time for each of the raw files and object name
         obj=str_arr[2].split('_')
         obj.append(str_arr[0])
         date_filt.append(obj)
     
     cmd = "find */wfc3_ir -name 'raw_*"+str(l_obsdate+1)+"*' -type d"
-    for file in os.popen(cmd).readlines():
+    for f in os.popen(cmd).readlines():
         #get just the folder name
-        str_arr=file.split('/')
+        str_arr=f.split('/')
         #get the obsdate and the filter, instrument=wfc3_ir, and the start time for each of the raw files
         obj=str_arr[2].split('_')
         obj.append(str_arr[0])
         date_filt.append(obj)
         
     cmd = "find */wfc3_ir -name 'raw_*"+str(l_obsdate-1)+"*' -type d"
-    for file in os.popen(cmd).readlines():
+    for f in os.popen(cmd).readlines():
         #get just the folder name
-        str_arr=file.split('/')
+        str_arr=f.split('/')
         #get the obsdate and the filter, instrument=wfc3_ir, and the start time for each of the raw files
         obj=str_arr[2].split('_')
         obj.append(str_arr[0])
@@ -888,7 +888,7 @@ def cal_wfc3ir(obsdate,ref='/scratch/snmct/ref/wfc3_ir/',mtab='/scratch/snmct/re
         os.system('find '+ref+'dark/ -mindepth 1 -not -name "i*.fits" -name "*tmc.fits" -exec mv -f {} '+mtab+' \;')
         os.system('find '+ref+'dark/ -mindepth 1 -not -name "i*.fits" -name "*tmg.fits" -exec mv -f {} '+mtab+' \;')
         os.system('find . -not -name "i*.fits" -name "*.fits" -exec mv -f {} '+ref+' \;')
-        raw_files,alist=tools.parseinput.parseinput('*raw.fits')
+        raw_files=tools.parseinput.parseinput('*raw.fits')[0]
         
         #Clear out the old versions of the flt files and other stuff so calwf3 works
         os.system('rm -rf *_flt.fits')
@@ -896,15 +896,15 @@ def cal_wfc3ir(obsdate,ref='/scratch/snmct/ref/wfc3_ir/',mtab='/scratch/snmct/re
         os.system('rm -rf *_tra.fits')
         os.system('rm -rf *_asn.fits')
         
-        for file in raw_files:
+        for f in raw_files:
             print(file)
             #Get the start time for each of the exposures and strip off the _raw.fits from the filename
             expstart=float(pyfits.getval(file,'EXPSTART'))
             imgs.append((file[:-9],this_filter,this_date,expstart,this_obj))
         
             #run calwfc3 on the observation data
-            pyfits.setval(file,'PHOTCORR',value='OMIT')
-            wfc3.calwf3(file)
+            pyfits.setval(f,'PHOTCORR',value='OMIT')
+            wfc3.calwf3(f)
             
         os.chdir('../../../')
     
