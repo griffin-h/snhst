@@ -180,7 +180,7 @@ def drizzle(output_name,input_files='',ref='',template_image='',
         
     #convert the input list for multidrizzle into a useable list of images
     imgs = []
-    imgs_full,alist=tools.parseinput.parseinput(input_files)
+    imgs_full=tools.parseinput.parseinput(input_files)[0]
     
     for img in imgs_full:
         #strip off the the extension (_flt or _c0m) and the .fits
@@ -192,37 +192,44 @@ def drizzle(output_name,input_files='',ref='',template_image='',
     if drizra==0.0 and drizdec == 0.0:
         #grab the target ra and dec from the header of the first file
         hdulist=pyfits.open(imgs_full[0])
-        twcs = WCS('template.fits')
         #find the midpoint of the cr vals for the different chips
         if instrument in ['wfc3_ir','acs_hrc']:
             hdr=hdulist['SCI'].header
-            drizra = float(hdr['crval1'])
-            drizdec = float(hdr['crval2'])
+            imwcs = WCS(hdr)
+            drizra,drizdec = imwcs.getCentreWCSCoords() 
+
         elif instrument in ['acs','wfc3_uvis']:
             hdr=hdulist['SCI',1].header
-            drizra = float(hdr['crval1'])
-            drizdec = float(hdr['crval2'])
+            imwcs = WCS(hdr)
+            drizra,drizdec = imwcs.getCentreWCSCoords() 
+
             hdr=hdulist['SCI',2].header
-            drizra = float(hdr['crval1'])+drizra
-            drizdec = float(hdr['crval2'])+drizdec
-            drizra=drizra/2.0
-            drizdec=drizdec/2.0
+            imwcs = WCS(hdr)
+            drizra +=imwcs.getCentreWCSCoords()[0] 
+            drizdec += imwcs.getCentreWCSCoords()[1]
+            drizra /= 2.0
+            drizdec /= 2.0
         elif instrument=='wfpc2_wf':
             hdr=hdulist['SCI',2].header
-            drizra = float(hdr['crval1'])
-            drizdec = float(hdr['crval2'])
+            imwcs = WCS(hdr)
+            drizra,drizdec = imwcs.getCentreWCSCoords() 
+            
             hdr=hdulist['SCI',3].header
-            drizra = float(hdr['crval1'])+drizra
-            drizdec = float(hdr['crval2'])+drizdec
+            imwcs = WCS(hdr)
+            drizra +=imwcs.getCentreWCSCoords()[0] 
+            drizdec += imwcs.getCentreWCSCoords()[1]
+            
             hdr=hdulist['SCI',4].header
-            drizra = float(hdr['crval1'])+drizra
-            drizdec = float(hdr['crval2'])+drizdec
-            drizra=drizra/3.0
-            drizdec=drizdec/3.0
+            imwcs = WCS(hdr)
+            drizra +=imwcs.getCentreWCSCoords()[0] 
+            drizdec += imwcs.getCentreWCSCoords()[1]
+            drizra /=   3.0
+            drizdec /= 3.0
         elif instrument=='wfpc2_pc':
             hdr=hdulist['SCI',1].header
-            drizra = float(hdr['crval1'])
-            drizdec = float(hdr['crval2'])
+            imwcs = WCS(hdr)
+            drizra,drizdec = imwcs.getCentreWCSCoords() 
+
         hdulist.close()
         
     if template_image!='':
@@ -750,10 +757,10 @@ def sextractor(image,thresh=2.5,minarea=4):
     file.close()
 
 
-def run(output_name,input_files='',ref='',sub_template='',phot_sub_template='',image_instrument='wfc3_ir',templ_instrument='wfc3_ir',wcs_template='',do_cte=False,shift_file='',ra=0.0,dec=0.0,pixel_scale=0.0,this_nx=0,this_ny=0,do_drizzle=True,this_pix_frac=1.0):
+def run(output_name,input_files='',ref='',sub_template='',phot_sub_template='',image_instrument='wfc3_ir',templ_instrument='wfc3_ir',wcs_template='',do_cte=False,ra=0.0,dec=0.0,pixel_scale=0.0,this_nx=0,this_ny=0,do_drizzle=True,this_pix_frac=1.0):
   
     if do_drizzle:
-        drizzle(output_name, input_files,ref, template_image=wcs_template, instrument=image_instrument,acs_cte=do_cte,user_shift_file=shift_file,drizra=ra,drizdec=dec, pix_scale=pixel_scale,nx=this_nx,ny=this_ny,pix_frac=this_pix_frac)
+        drizzle(output_name, input_files,ref, template_image=wcs_template, instrument=image_instrument,acs_cte=do_cte,drizra=ra,drizdec=dec, pix_scale=pixel_scale,nx=this_nx,ny=this_ny,pix_frac=this_pix_frac)
 
     if sub_template != '':
         
