@@ -17,7 +17,7 @@ from numpy.linalg import norm
 import readcol
 from pyfits import getval
 
-def coarsealign(x1s, x2s,s_img, x1t, x2t,t_img):
+def calccoarsealign(x1s, x2s,s_img, x1t, x2t,t_img):
     #Takes the position of two stars on two different images and calculates the values
     #needed for the shift file. s = source, t = template
     twcs = WCS(t_img)
@@ -49,10 +49,42 @@ def coarsealign(x1s, x2s,s_img, x1t, x2t,t_img):
     #This follows the same convention as the overall wcs params in snhst.drizzle
     return x0,y0,th*180.0/pi,a
 
+def coarsealign(imgs,nchip,drizra,drizdec,rashift,decshift,rot,scale):
+    for img in imgs:
+        hdulist = pyfits.open(img)
+        for i in range(1,nchip*3+1):
+            cd1_1 = float(hdulist[i].header['CD1_1'])
+            cd1_2 = float(hdulist[i].header['CD1_2'])
+            cd2_1 = float(hdulist[i].header['CD2_1'])
+            cd2_2 = float(hdulist[i].header['CD2_2'])
+            
+            cd = array([[cd1_1,cd1_2],[cd2_1,cd2_2]])
+            rotmat = array([[scale * cos(rot/180.0 * pi), scale*sin(rot/180.0 * pi)],
+                           [-scale*sin(rot/180.0 * pi),scale*cos(rot/180.0 * pi)]])
+            
+            cdout = rotmat.dot(cd)
+            
+            hdulist[i].header['CD1_1']= cdout[0][0]
+            hdulist[i].header['CD1_2']= cdout[0][1]
+            hdulist[i].header['CD2_1']= cdout[1][0]
+            hdulist[i].header['CD2_2']= cdout[1][1]
+            
+            crval1 = float(hdulist[i].header['CRVAL1'])
+            crval2 = float(hdulist[i].header['CRVAL2'])
+            
+            #Translate to the center of the drizzle frame
+            rotshift = array([ crval1 - drizra , crval2 - drizdec])
+            #rotate and translate back
+            rotshift -= rotmat.dot(rotshift) 
+            hdulist[i].header['CRVAL1'] = crval1 + rashift - rotshift[0]
+            hdulist[i].header['CRVAL2'] = crval2 + decshift - rotshift[1]
+        hdulist.writeto(img,clobber=True)
+        hdulist.close()
+        
 def drizzle(output_name,input_files='',ref='',template_image='',
             instrument='wfc3_ir',drizra=0.0,drizdec=0.0,pix_scale=0.0,drizrot=0.0,nx=0,ny=0,
             pix_frac=1.0,acs_cte=False,do_destripe=True,
-            clean = True, find_shifts = True,scale = 1.0, rot = 0.0,rashift=0.0,decshift =0.0):
+            clean = True, find_shifts = True,scale = 1.0, rot = 0.0,rashift=0.0,decshift =0.0, threshold= 30.0):
     
     this_dir=os.getcwd()+'/'
     if ref=='': ref=this_dir
@@ -277,10 +309,13 @@ def drizzle(output_name,input_files='',ref='',template_image='',
         hdr=hdulist[0].header
         nx =int(hdr['naxis1'])
         ny =int(hdr['naxis2'])
-
+        
         drizra,drizdec = twcs.getCentreWCSCoords()
-
+        
         pix_scale=3600.0*twcs.getPixelSizeDeg()
+        #Add a half pixel to conform to the astrodrizzle convention
+        drizra += 0.5*pix_scale/3600.0
+        drizdec -= 0.5*pix_scale/3600.0
         drizrot = twcs.getRotationDeg()
         #make a template weight image
         weight_mask=hdulist[0].data.copy()
@@ -317,7 +352,7 @@ def drizzle(output_name,input_files='',ref='',template_image='',
                         'conv_width = 3.5# Convolution kernel width in scale units\n',
                         'peakmin = None# Min source peak value\n',
                         'peakmax = None# Max source peak value\n',
-                        'threshold = 30.0# Threshold in sigma for feature detection\n', # this seems to work well for crowded fields, still needs to be tested in uncrowded fields                  
+                        'threshold = %g# Threshold in sigma for feature detection\n'% threshold,# this seems to work well for crowded fields, still needs to be tested in uncrowded fields                  
                         'nsigma = 1.5# Width of convolution kernel in sigma\n',
                         'fluxmin = None# Min good total source flux\n',
                         'fluxmax = None# Max good total source flux\n',
@@ -431,39 +466,7 @@ def drizzle(output_name,input_files='',ref='',template_image='',
                 os.system('rm -rf '+img+'_raw.fits')
     
     # Apply overall shifts, rotation and scale to wcs
-    for j,img in enumerate(imgs_full):
-        hdulist = pyfits.open(img)
-        for i in range(1,nchip*3+1):
-            
-            
-            cd1_1 = float(hdulist[i].header['CD1_1'])
-            cd1_2 = float(hdulist[i].header['CD1_2'])
-            cd2_1 = float(hdulist[i].header['CD2_1'])
-            cd2_2 = float(hdulist[i].header['CD2_2'])
-            
-            cd = array([[cd1_1,cd1_2],[cd2_1,cd2_2]])
-            rotmat = array([[scale * cos(rot/180.0 * pi), scale*sin(rot/180.0 * pi)],
-                           [-scale*sin(rot/180.0 * pi),scale*cos(rot/180.0 * pi)]])
-            
-            cdout = rotmat.dot(cd)
-            
-            hdulist[i].header['CD1_1']= cdout[0][0]
-            hdulist[i].header['CD1_2']= cdout[0][1]
-            hdulist[i].header['CD2_1']= cdout[1][0]
-            hdulist[i].header['CD2_2']= cdout[1][1]
-            
-            crval1 = float(hdulist[i].header['CRVAL1'])
-            crval2 = float(hdulist[i].header['CRVAL2'])
-            
-            #Translate to the center of the drizzle frame
-            rotshift = array([ crval1 - drizra , crval2 - drizdec])
-            #rotate and translate back
-            rotshift -= rotmat.dot(rotshift) 
-            hdulist[i].header['CRVAL1'] = crval1 + rashift - rotshift[0]
-            hdulist[i].header['CRVAL2'] = crval2 + decshift - rotshift[1]
-        hdulist.writeto(img,clobber=True)
-        hdulist.close()
-            
+    coarsealign(imgs_full,nchip,drizra,drizdec,rashift,decshift,rot,scale)
             
     if instrument == 'wfc3_ir': do_drizcr = False
     else: do_drizcr = True
@@ -531,11 +534,11 @@ def drizzle(output_name,input_files='',ref='',template_image='',
                 '[STEP 4: CREATE MEDIAN IMAGE]\n',
                 'median = True# "Create a median image?"\n',
                 'median_newmasks = True# "Create new masks when doing the median?"\n',
-                'combine_maskpt = 0.5# "Percentage of weight image value below which it is flagged as a bad pixel."\n',
-                'combine_type = median# "Type of combine operation"\n', #Choose minimum for now, this is better if we only have 2 flts
+                'combine_maskpt = 0.2# "Percentage of weight image value below which it is flagged as a bad pixel."\n',
+                'combine_type = minmed# "Type of combine operation"\n', #Choose minmed for now, this is better if we only have 2 flts
                 'combine_nsigma = 4 3# "Significance for accepting minimum instead of median"\n',
                 'combine_nlow = 0# "minmax: Number of low pixels to reject"\n',
-                'combine_nhigh = 1# "minmax: Number of high pixels to reject"\n',
+                'combine_nhigh = 0# "minmax: Number of high pixels to reject"\n',
                 'combine_lthresh = -10000# Lower threshold for clipping input pixel values\n',
                 'combine_hthresh = None# "Upper threshold for clipping input pixel values"\n',
                 'combine_grow = 1# Radius (pixels) for neighbor rejection\n',
