@@ -16,6 +16,9 @@ from numpy import cos,sin,array,pi,arctan
 from numpy.linalg import norm
 import readcol
 from pyfits import getval
+import resource
+from glob import glob
+resource.setrlimit(resource.RLIMIT_NOFILE, (10000,-1))
 
 def calccoarsealign(x1s, x2s,s_img, x1t, x2t,t_img):
     #Takes the position of two stars on two different images and calculates the values
@@ -84,7 +87,7 @@ def coarsealign(imgs,nchip,drizra,drizdec,rashift,decshift,rot,scale):
 def drizzle(output_name,input_files='',ref='',template_image='',
             instrument='wfc3_ir',drizra=0.0,drizdec=0.0,pix_scale=0.0,drizrot=0.0,nx=0,ny=0,
             pix_frac=1.0,acs_cte=False,do_destripe=True,
-            clean = True, find_shifts = True,scale = 1.0, rot = 0.0,rashift=0.0,decshift =0.0, threshold= 30.0):
+            clean = True, find_shifts = True,scale = 1.0, rot = 0.0,rashift=0.0,decshift =0.0, threshold= 30.0,num_cores = 8):
     
     this_dir=os.getcwd()+'/'
     if ref=='': ref=this_dir
@@ -94,7 +97,7 @@ def drizzle(output_name,input_files='',ref='',template_image='',
     #Do use smaller pixels than native to help differentiate between cosmic rays.
     #Do leave in saturated pixels for cosmics
     if instrument == 'wfc3_uvis':
-        [grp,units,sep_bits,final_bits]=['','electrons',256+2048,256+2048]
+        [grp,units,sep_bits,final_bits]=['','electrons',0,0]
         os.environ['iref']=ref
         nchip=2
         
@@ -113,7 +116,7 @@ def drizzle(output_name,input_files='',ref='',template_image='',
         if input_files=='': input_files='*_flt.fits'
    
     elif instrument == 'acs':
-        [grp,units,sep_bits,final_bits]=['','electrons',256,256]
+        [grp,units,sep_bits,final_bits]=['','electrons',0,0]
         os.environ['jref']=ref
         nchip=2
 
@@ -466,14 +469,17 @@ def drizzle(output_name,input_files='',ref='',template_image='',
                 os.system('rm -rf '+img+'_raw.fits')
     
     # Apply overall shifts, rotation and scale to wcs
-    coarsealign(imgs_full,nchip,drizra,drizdec,rashift,decshift,rot,scale)
+    if rashift!= 0.0 and decshift != 0.0:coarsealign(imgs_full,nchip,drizra,drizdec,rashift,decshift,rot,scale)
             
     if instrument == 'wfc3_ir': do_drizcr = False
     else: do_drizcr = True
 
     #run astrodrizzle
     tools.teal.unlearn('astrodrizzle')
-
+    
+    num_images=len(glob(input_files))
+    if num_images ==1: medstr='mean'
+    else: medstr='minmed'
     adlines = ['_task_name_ = astrodrizzle# \n',
                 'input = ' +input_files+'# Input files (name, suffix, or @list)\n',
                 'output = "'+output_name+'"# Rootname for output drizzled products\n',
@@ -488,7 +494,7 @@ def drizzle(output_name,input_files='',ref='',template_image='',
                 'crbit = 4096# Bit value for CR ident. in DQ array\n',
                 'stepsize = 10# Step size for drizzle coordinate computation\n',
                 'resetbits = 4096# Bit values to reset in all input DQ arrays\n' #reset all of the 4096 flags from multidrizzle for the HST pipeline,
-                'num_cores = None# Max CPU cores to use (n<2 disables, None = auto-decide)\n',
+                'num_cores = %i# Max CPU cores to use (n<2 disables, None = auto-decide)\n'%num_cores,
                 'in_memory = False# Process everything in memory to minimize disk I/O?\n',#In principle this would be nice, but it doesn't update the input flt files with the new DQ mask if set to True
                 '\n',
                 '[STATE OF INPUT FILES]\n',
@@ -528,14 +534,14 @@ def drizzle(output_name,input_files='',ref='',template_image='',
                 'driz_sep_scale = '+str(pix_scale)+'# Absolute size of output pixels in arcsec/pixel\n',
                 'driz_sep_outnx = '+str(nx)+'# Size of separate output frame\'s X-axis (pixels)\n',
                 'driz_sep_outny = '+str(ny)+'# Size of separate output frame\'s Y-axis (pixels)\n',
-                'driz_sep_ra = %0.8f# right ascension output frame center in decimal degrees\n'%drizra,
-                'driz_sep_dec = %0.8f# declination output frame center in decimal degrees\n'%drizdec,
+                'driz_sep_ra = '+str(drizra)+'# right ascension output frame center in decimal degrees\n',
+                'driz_sep_dec = '+str(drizdec)+'# declination output frame center in decimal degrees\n',
                 '\n',
                 '[STEP 4: CREATE MEDIAN IMAGE]\n',
                 'median = True# "Create a median image?"\n',
                 'median_newmasks = True# "Create new masks when doing the median?"\n',
                 'combine_maskpt = 0.2# "Percentage of weight image value below which it is flagged as a bad pixel."\n',
-                'combine_type = minmed# "Type of combine operation"\n', #Choose minmed for now, this is better if we only have 2 flts
+                'combine_type = %s# "Type of combine operation"\n'%medstr, #Choose minmed for now, this is better if we only have 2 flts
                 'combine_nsigma = 4 3# "Significance for accepting minimum instead of median"\n',
                 'combine_nlow = 0# "minmax: Number of low pixels to reject"\n',
                 'combine_nhigh = 0# "minmax: Number of high pixels to reject"\n',
@@ -575,8 +581,8 @@ def drizzle(output_name,input_files='',ref='',template_image='',
                 'final_scale = '+str(pix_scale)+' # Absolute size of output pixels in arcsec/pixel\n',
                 'final_outnx = '+str(nx)+'# Size of FINAL output frame X-axis (pixels)\n',
                 'final_outny = '+str(ny)+'# Size of FINAL output frame Y-axis (pixels)\n',
-                'final_ra = %0.8f'%drizra+'# right ascension output frame center in decimal degrees\n',
-                'final_dec = %0.8f'%drizdec+'# declination output frame center in decimal degrees\n',
+                'final_ra = '+str(drizra)+'# right ascension output frame center in decimal degrees\n',
+                'final_dec = '+str(drizdec)+'# declination output frame center in decimal degrees\n',
                 '\n',
                 '[INSTRUMENT PARAMETERS]\n',
                 'gain = ""# \n',
@@ -595,6 +601,7 @@ def drizzle(output_name,input_files='',ref='',template_image='',
     
     if instrument =='acs' : drzstr = '_drc'
     else: drzstr = '_drz'    
+    if 'flc' in input_files: drzstr='_drc'
     hdulist=pyfits.open(output_name+drzstr+'_sci.fits')
     hdr=hdulist[0].header
     cosmic_hdr=hdr.copy()
