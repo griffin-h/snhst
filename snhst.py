@@ -1097,3 +1097,75 @@ def run_cte(img,img_base,do_destripe=True):
         os.system('rm -f '+img)
         os.system('mv '+img_base+'_flt_dstrp.fits '+img)
                    
+import sqlcl
+from numpy import float64
+astrometry_index_dir = '/usr/local/astro64/astrometry/data/'
+def makesdsscat(img, ra,dec,filt):
+    #Strip of the drz_sci.fits of the filename
+    outbase = img.split('_')[0]
+    #Query the SDSS database for all objects detected above 3 sigma within +- 5' of the ra and dec
+    #Sort by brightness in the given filter 
+    import pdb; pdb.set_trace()
+    qry = sqlcl.query("select ra, dec, %s from star where ra < %0.8f and  ra > %0.8f and dec <  %0.8f and dec > %0.8f and err_%s < 0.3 order by %s"%(filt,ra+1.0/12.0, ra-1.0/12.0,dec+1.0/12.0, dec-1.0/12.0,filt,filt ),url='http://cas.sdss.org/stripe82/en/tools/search/x_sql.asp')
+    qrytxt = qry.read()
+    qry.close()
+    qrylist = [i.split(',') for i in qrytxt.split('\n')[2:-1]]
+    qryarr = array(qrylist,dtype=float64)
+    c1 = pyfits.Column('RA',format='1D',array = qryarr.transpose()[0],unit = 'deg')
+    c2 = pyfits.Column('DEC',format='1D',array = qryarr.transpose()[1],unit='deg')
+    c3 = pyfits.Column('MAG',format='1D',array = qryarr.transpose()[2],unit='mag')
+    coldefs=pyfits.ColDefs([c1,c2,c3])
+    tbhdu = pyfits.new_table(coldefs)
+    outfile = outbase+'.cat.fits'
+    if os.path.exists(outfile): os.remove(outfile)
+    tbhdu.writeto(outbase+'.cat.fits')
+    
+    #Build the index file
+    indexfile = outbase+'.index.fits'
+    if os.path.exists(indexfile):os.remove(indexfile)
+    os.system('build-astrometry-index -i %s -o %s -P -2 -n 1000 -E -I %s'%(outfile,indexfile,outbase))
+    
+    #Write our own backend.cfg file
+    lines = []
+    lines.append('cpulimit 300\n')
+
+    # In which directories should we search for indices?
+    lines.append('add_path %s\n'%os.getcwd())
+    lines.append('index %s.index\n'%outbase)
+    f = open('backend.cfg','w')
+    f.writelines(lines)
+    f.close()
+    
+def runastrometry(img, ra, dec, pix_scale):
+    #Strip of the drz_sci.fits of the filename
+    outfile = img.split('_')[0]+'_reg.fits'
+    #run solve field using the new index file
+    os.system('solve-field --backend-config ./backend.cfg --no-plots --ra %0.8f --dec %0.8f --radius 1.0 --downsample 4 --overwrite --scale-units arcsecperpix --scale-low %0.3f --scale-high %0.3f --crpix-center --no-tweak --no-fits2fits -d 1-3000 --new-fits '
+             %(ra,dec,pix_scale*0.8, pix_scale*1.2) +outfile +' ' +img)
+    
+cat_filter={'F250W':'u', 'F435W':'g', 'F439W':'g', 'F450W':'g', 'F475W':'g', 'F550M':'g', 'F555W':'g',
+       'F606W':'r', 'F625W':'r', 'F675W':'r', 'F702W':'i', 'F775W':'i', 'F814W':'i'}
+def register2sdss(img):
+    #get the RA and Dec of the center of the frame
+    imwcs = WCS(img)
+    ra,dec = imwcs.getCentreWCSCoords()
+    
+    #Get the pixel scale in arcseconds/pixel
+    pix_scale = imwcs.getPixelSizeDeg()/3600.0
+    
+    #get the filter
+    instrument = pyfits.getval(img,'INSTRUME')
+    if instrument =='ACS':
+        filt  = pyfits.getval(img,'FILTER1')
+        if filt =='CLEAR1L': filt =  pyfits.getval(img,'FILTER2')
+    else: filt = pyfits.getval('FILTER')
+    
+    #Figure out which SDSS filter to use for the catalog 
+    sdss_filt = cat_filter[filt]
+    
+    #make the catalog
+    makesdsscat(img,ra,dec,sdss_filt)
+    
+    #run astrometry.net
+    runastrometry(img,ra,dec,pix_scale)
+    
