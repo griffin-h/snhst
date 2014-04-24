@@ -1105,7 +1105,6 @@ def makesdsscat(img, ra,dec,filt):
     outbase = img.split('_')[0]
     #Query the SDSS database for all objects detected above 3 sigma within +- 5' of the ra and dec
     #Sort by brightness in the given filter 
-    import pdb; pdb.set_trace()
     qry = sqlcl.query("select ra, dec, %s from star where ra < %0.8f and  ra > %0.8f and dec <  %0.8f and dec > %0.8f and err_%s < 0.3 order by %s"%(filt,ra+1.0/12.0, ra-1.0/12.0,dec+1.0/12.0, dec-1.0/12.0,filt,filt ),url='http://cas.sdss.org/stripe82/en/tools/search/x_sql.asp')
     qrytxt = qry.read()
     qry.close()
@@ -1123,7 +1122,7 @@ def makesdsscat(img, ra,dec,filt):
     #Build the index file
     indexfile = outbase+'.index.fits'
     if os.path.exists(indexfile):os.remove(indexfile)
-    os.system('build-astrometry-index -i %s -o %s -P -2 -n 1000 -E -I %s'%(outfile,indexfile,outbase))
+    os.system('build-astrometry-index -i %s -o %s -P -2 -n 1000 -E -j 0.05  -I %s'%(outfile,indexfile,outbase))
     
     #Write our own backend.cfg file
     lines = []
@@ -1140,7 +1139,7 @@ def runastrometry(img, ra, dec, pix_scale):
     #Strip of the drz_sci.fits of the filename
     outfile = img.split('_')[0]+'_reg.fits'
     #run solve field using the new index file
-    os.system('solve-field --backend-config ./backend.cfg --no-plots --ra %0.8f --dec %0.8f --radius 1.0 --downsample 4 --overwrite --scale-units arcsecperpix --scale-low %0.3f --scale-high %0.3f --crpix-center --no-tweak --no-fits2fits -d 1-3000 --new-fits '
+    os.system('solve-field --backend-config ./backend.cfg --no-plots --ra %0.8f --dec %0.8f --radius 1.0  --overwrite --scale-units arcsecperpix --downsample 8 --scale-low %0.3f --scale-high %0.3f --crpix-center --no-tweak --no-fits2fits -d 1-3000 --new-fits '
              %(ra,dec,pix_scale*0.8, pix_scale*1.2) +outfile +' ' +img)
     
 cat_filter={'F250W':'u', 'F435W':'g', 'F439W':'g', 'F450W':'g', 'F475W':'g', 'F550M':'g', 'F555W':'g',
