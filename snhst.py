@@ -99,7 +99,7 @@ def drizzle(output_name, input_files='', ref='', template_image='',
             drizrot=0.0, nx=0, ny=0, pix_frac=1.0, acs_cte=False,
             do_destripe=True, clean=True, find_shifts=True, scale=1.0,
              rot=0.0, rashift=0.0, decshift=0.0, threshold=20.0, num_cores=8,
-            mexfile=False, context=False):
+            mexfile=False, context=False, skysub=True):
 
     this_dir = os.getcwd() + '/'
     if ref == '':
@@ -599,7 +599,7 @@ def drizzle(output_name, input_files='', ref='', template_image='',
         'static_sig = 4.0# "Sigma*rms below mode to clip for static mask"\n',
         '\n',
         '[STEP 2: SKY SUBTRACTION]\n',
-        'skysub = True# "Perform sky subtraction?"\n',
+        'skysub = %s# "Perform sky subtraction?"\n'%skysub,
         'skywidth = 0.1# "Bin width for sampling sky statistics (in sigma)"\n',
         'skystat = mode# "Sky correction statistics parameter"\n',  # We use the mode here instead of the median and use a narrower width
         'skylower = 0.0# "Lower limit of usable data for sky (always in electrons)"\n',
@@ -710,7 +710,10 @@ def drizzle(output_name, input_files='', ref='', template_image='',
     # add the sky value back in
     # only add the sky to non flagged pixels (-50k)
     sci = hdulist[sciext].data
-    mdrizsky = numpy.min(sci[sci > -49999.0])
+    if skysub:
+       mdrizsky = numpy.min(sci[sci > -49999.0])
+    else:
+        mdrizsky= 0.0
     sci[sci > -49999.0] -= mdrizsky
     no_data = sci < -49999.0
     sci[no_data] = 0.0
