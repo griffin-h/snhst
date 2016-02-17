@@ -19,7 +19,7 @@ import readcol
 from pyfits import getval
 import resource
 from glob import glob
-resource.setrlimit(resource.RLIMIT_NOFILE, (10000, -1))
+#resource.setrlimit(resource.RLIMIT_NOFILE, (10000, -1))
 
 
 def calccoarsealign(x1s, x2s, s_img, x1t, x2t, t_img):
@@ -148,6 +148,28 @@ def drizzle(output_name, input_files='', ref='', template_image='',
         if template_image == '' and nx == 0:
             nx = 5200
             ny = 5200
+            # native_pix_scale=0.0495
+        if template_image == '' and pix_scale == 0.0:
+            pix_scale = 0.05
+        if input_files == '':
+            input_files = '*_flc.fits'
+
+    elif instrument == 'acs_sub':
+        [grp, units, sep_bits, final_bits] = ['', 'electrons', 0, 0]
+        os.environ['jref'] = ref
+        nchip = 1
+
+        # parameters for la cosmic
+        rdnoise = 6.5
+        img_gain = 1.0
+        satval = 70000.0
+        sig_clip = 3.0
+        sig_frac = 0.1
+        obj_lim = 5.0
+
+        if template_image == '' and nx == 0:
+            nx = 1400
+            ny = 1400
             # native_pix_scale=0.0495
         if template_image == '' and pix_scale == 0.0:
             pix_scale = 0.05
@@ -300,7 +322,7 @@ def drizzle(output_name, input_files='', ref='', template_image='',
         # grab the target ra and dec from the header of the first file
         hdulist = pyfits.open(imgs_full[0])
         # find the midpoint of the cr vals for the different chips
-        if instrument in ['wfc3_ir', 'acs_hrc']:
+        if instrument in ['wfc3_ir', 'acs_hrc', 'acs_sub']:
             hdr = hdulist['SCI'].header
             imwcs = WCS(hdr, mode='pyfits')
             drizra, drizdec = imwcs.getCentreWCSCoords()
@@ -710,7 +732,7 @@ def drizzle(output_name, input_files='', ref='', template_image='',
         new_hdulist.close()
         new_hdu = pyfits.PrimaryHDU(crmask.astype('i'), cosmic_hdr)
         new_hdulist = pyfits.HDUList([new_hdu])
-        new_hdulist.writeto(output_name + '_lamask.fits')
+        new_hdulist.writeto(output_name + '_lamask.fits', clobber=True)
         new_hdulist.close()
     # data products are now finished
 
