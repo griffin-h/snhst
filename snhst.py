@@ -99,7 +99,7 @@ def drizzle(output_name, input_files='', ref='', template_image='',
             drizrot=0.0, nx=0, ny=0, pix_frac=1.0, acs_cte=False,
             do_destripe=True, clean=True, find_shifts=True, scale=1.0,
              rot=0.0, rashift=0.0, decshift=0.0, threshold=20.0, num_cores=8,
-            mexfile=False, context=False, skysub=True):
+            mexfile=False, context=False, skysub=True, custom_sep_wcs=False):
 
     this_dir = os.getcwd() + '/'
     if ref == '':
@@ -131,6 +131,27 @@ def drizzle(output_name, input_files='', ref='', template_image='',
             pix_scale = 0.04
         if input_files == '':
             input_files = '*_flc.fits'
+
+    elif instrument == 'wfc3_uvis_sub':
+        [grp, units, sep_bits, final_bits] = ['', 'electrons', 0, 0]
+        os.environ['iref'] = ref
+        nchip = 1
+
+        # parameters for la cosmic
+        rdnoise = 6.5
+        img_gain = 1.0
+        satval = 70000.0
+        sig_clip = 4.0
+        sig_frac = 0.2
+        obj_lim = 6.0
+        if template_image == '' and nx == 0:
+            nx = 1400
+            ny = 1400
+            # native_pix_scale=0.04
+        if template_image == '' and pix_scale == 0.0:
+            pix_scale = 0.04
+        if input_files == '':
+            input_files = '*_flt.fits'
 
     elif instrument == 'acs':
         [grp, units, sep_bits, final_bits] = ['', 'electrons', 0, 0]
@@ -174,7 +195,7 @@ def drizzle(output_name, input_files='', ref='', template_image='',
         if template_image == '' and pix_scale == 0.0:
             pix_scale = 0.05
         if input_files == '':
-            input_files = '*_flc.fits'
+            input_files = '*_flt.fits'
 
     elif instrument == 'acs_hrc':
         [grp, units, sep_bits, final_bits] = ['', 'electrons', 256, 256]
@@ -322,7 +343,7 @@ def drizzle(output_name, input_files='', ref='', template_image='',
         # grab the target ra and dec from the header of the first file
         hdulist = pyfits.open(imgs_full[0])
         # find the midpoint of the cr vals for the different chips
-        if instrument in ['wfc3_ir', 'acs_hrc', 'acs_sub']:
+        if instrument in ['wfc3_ir', 'acs_hrc', 'acs_sub', 'wfc3_uvis_sub']:
             hdr = hdulist['SCI'].header
             imwcs = WCS(hdr, mode='pyfits')
             drizra, drizdec = imwcs.getCentreWCSCoords()
@@ -575,7 +596,6 @@ def drizzle(output_name, input_files='', ref='', template_image='',
         'input = ' + input_files + '# Input files (name, suffix, or @list)\n',
         'output = "' + output_name + '"# Rootname for output drizzled products\n',
         'runfile = ""# File for logging the processing\n',  # Don't save a log for now.
-        'updatewcs = False# Update the WCS keywords?\n',  # This reverts things so it messes up the work tweakreg did if true
         'wcskey = "%s"# WCS version to use in processing\n' % wcskey,
         'proc_unit = ' + units + '# Units used during processing\n',
         'coeffs = True# Use header-based distortion coefficients?\n',
@@ -600,6 +620,7 @@ def drizzle(output_name, input_files='', ref='', template_image='',
         '\n',
         '[STEP 2: SKY SUBTRACTION]\n',
         'skysub = %s# "Perform sky subtraction?"\n'%skysub,
+        'skymethod = localmin\n',
         'skywidth = 0.1# "Bin width for sampling sky statistics (in sigma)"\n',
         'skystat = mode# "Sky correction statistics parameter"\n',  # We use the mode here instead of the median and use a narrower width
         'skylower = 0.0# "Lower limit of usable data for sky (always in electrons)"\n',
@@ -619,7 +640,7 @@ def drizzle(output_name, input_files='', ref='', template_image='',
         'driz_sep_bits = ' + str(sep_bits) + '# Integer mask bit values considered good\n',
         '\n',
         '[STEP 3a: CUSTOM WCS FOR SEPARATE OUTPUTS]\n',
-        'driz_sep_wcs = True# "Define custom WCS for separate output images?"\n',
+        'driz_sep_wcs = %s# "Define custom WCS for separate output images?"\n'%custom_sep_wcs,
         'driz_sep_refimage = "%s"# Reference image from which to obtain a WCS\n' % template_image,
         'driz_sep_rot = ' + str(drizrot) + '# "Position Angle of drizzled image\'s Y-axis w.r.t. North (degrees)"\n',
         'driz_sep_scale = ' + str(pix_scale) + '# Absolute size of output pixels in arcsec/pixel\n',
