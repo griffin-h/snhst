@@ -5,7 +5,6 @@ Created on Dec 17, 2010
 '''
 import os
 from pyraf import iraf
-from iraf import stsdas, dither, images, hst_calib, wfc3
 import pyfits, acstools, numpy
 from astroscrappy import detect_cosmics
 import drizzlepac
@@ -19,7 +18,6 @@ import readcol
 from pyfits import getval
 import resource
 from glob import glob
-#resource.setrlimit(resource.RLIMIT_NOFILE, (10000, -1))
 
 
 def calccoarsealign(x1s, x2s, s_img, x1t, x2t, t_img):
