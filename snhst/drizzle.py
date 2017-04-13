@@ -2,10 +2,12 @@ from drizzlepac import astrodrizzle
 from glob import glob
 import numpy as np
 from astropy.io import fits
-from drizzle_parameters import get_drizzle_parameters
+from snhst.parameters import get_drizzle_parameters
+from snhst.find_offsets import run_tweakreg
+from snhst.cosmics_rays import detect_cosmic_rays
 
 
-def drizzle(instrument, options):
+def drizzle(instrument, output_name, options):
     # Based on the instrument, get the default parameter values
     # Override any parameters that were provided by the user
     drizzle_options = get_drizzle_parameters(instrument, options)
@@ -17,7 +19,7 @@ def drizzle(instrument, options):
         run_tweakreg(drizzle_options)
 
     # run astrodrizzle on the images
-    run_astrodrizzle(drizzle_options)
+    run_astrodrizzle(output_name, drizzle_options)
 
     # Clean the cosmic rays from the image
     clean_cosmic_rays(drizzle_options)
@@ -74,3 +76,11 @@ def run_astrodrizzle(output_name, drizzle_options):
     sci_data[no_data] = 0.0
 
     sci_hdu.writeto(output_filename, clobber=True)
+
+
+def clean_cosmic_rays(options):
+    if options['instrument'] != 'wfc3_ir':
+        images = glob('*_dr?.fits')
+        for image in images:
+            output_image = image[:-8] + 'cr' + image[-6:]
+            detect_cosmic_rays(image, options['crpars'], output_image=output_image, masked_value=0.0)

@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-import snhst
 import os
 from glob import glob
 import shutil
@@ -7,6 +6,8 @@ import numpy as np
 from astropy.io import fits
 from astropy.wcs import WCS
 
+import logging
+logging.basicConfig(level=logging.INFO)
 
 def run(center=None, reference_image=None):
     # Make sure the position of interest is in the raw frame
@@ -43,6 +44,8 @@ def run(center=None, reference_image=None):
 
     # Run dolphot on the master dolphot directory
     # Convert the dolphot catalog to a fits file
+
+    # Run dolphot again with fake stars
 
     # Copy the final drizzled frames, cosmic ray removed frames, and the dolphot catalog to
     # a top directory
