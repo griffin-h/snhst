@@ -6,7 +6,8 @@ setup(name='snhst',
       version=0.9,
       packages=['snhst'],
       setup_requires=[],
-      install_requires=['numpy', 'astropy', 'matplotlib', 'drizzlepac', 'astroscrappy', 'reproject'],
+      install_requires=['numpy', 'astropy', 'matplotlib', 'drizzlepac', 'astroscrappy', 'reproject',
+                        'scipy'],
       tests_require=[],
       scripts=[]
       )

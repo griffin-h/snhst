@@ -1,4 +1,7 @@
 import os
+
+import numpy as np
+
 from snhst import fits_utils
 from glob import glob
 from astropy.io import fits
@@ -114,3 +117,13 @@ def run_dolphot(template_image, images, options):
         write_dolphot_image_parameters(f, image, i, options)
     f.close()
     os.system('dolphot dp.out -pdp.params 2 &> 1 | tee -a dp.log')
+
+
+def cut_bad_dolphot_sources(catalog):
+    # Reject bad sources
+    catalog = catalog[catalog['col11'] == 1]
+    # Sharpness cut
+    catalog = catalog[np.abs(catalog['col7']) < 0.3]
+    # Crowding cut
+    catalog = catalog[catalog['col10'] < 0.5]
+    return catalog
