@@ -12,7 +12,7 @@ def calculate_wcs_offset(input_image, input_catalog, reference_image, reference_
     # Read in the reference catalog and the input catalog x's, y's
     catalog = read_catalog(reference_image, reference_catalog)
     # Convert the reference x and y's into ra and dec
-    catalog['ra'], catalog['dec'] = wcs.WCS(reference_image).all_pix2world(ref_x, ref_y, origin)
+    catalog['ra'], catalog['dec'] = wcs.WCS(reference_image).all_pix2world(catalog['x'], catalog['y'], origin)
 
     input_catalog = read_catalog(input_image, input_catalog)
     input_wcs = wcs.WCS(input_image)
@@ -21,7 +21,7 @@ def calculate_wcs_offset(input_image, input_catalog, reference_image, reference_
     # Choose the brightest objects that overlap both images (always assume the reference image
     # is larger than the input image
     in_input_image = coords_inside_image(input_wcs, catalog)
-    catalog =  catalog[in_input_image].sorted('mag', desc=True)[:n_stars]
+    catalog = catalog[in_input_image].sorted('mag', desc=True)[:n_stars]
 
     input_catalog = input_catalog.sorted('mag', desc=True)[:n_stars]
 
@@ -34,7 +34,8 @@ def calculate_wcs_offset(input_image, input_catalog, reference_image, reference_
     input_catalog = input_catalog[separations.to(units.arcsec) < max_offset]
 
     # set the initial guess to be what is already in the header of the input catalog
-    optimize.minimize(wcs_objective, [0, 0], args=(input_catalog, catalog), method='Nelder-Mead')
+    results = optimize.minimize(wcs_objective, [0, 0], args=(input_catalog, catalog), method='Nelder-Mead')
+    return results['x']
 
 
 def wcs_objective(offset, input_catalog, reference_catalog):

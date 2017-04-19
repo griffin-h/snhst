@@ -4,7 +4,7 @@ import numpy as np
 from astropy.io import fits
 from snhst.parameters import get_drizzle_parameters
 from snhst.find_offsets import run_tweakreg
-from snhst.cosmics_rays import detect_cosmic_rays
+from snhst.cosmic_rays import detect_cosmic_rays
 
 
 def drizzle(instrument, output_name, options):

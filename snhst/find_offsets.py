@@ -4,7 +4,7 @@ import shutil
 import os
 from astropy.io import fits
 
-from snhst.cosmics_rays import detect_cosmic_rays
+from snhst.cosmic_rays import detect_cosmic_rays
 from snhst.fits_utils import is_sci_extension
 
 
