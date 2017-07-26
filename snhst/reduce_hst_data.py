@@ -228,24 +228,43 @@ def get_unique_visits(images):
     return unique_exposure_visits
 
 
+def get_default_reference_hst(visit_meta_data, options=None):
+    return visit_meta_data[0]
+
+
+def get_center_coordinates(flt_file):
+    from astropy.io import fits # If not already imported
+    hdulist = fits.open(flt_file)
+    RA = hdulist[0].header['RA_TARG']
+    Dec = hdulist[0].header['DEC_TARG']
+    return [RA, Dec]
+
+
 def sort_raw_data():
     images = get_raw_image_filenames()
 
-    visits = get_unique_visits(images)
+    visit_data = get_unique_visits(images)
+    # Sets up lists for each of the following for output as a dictionary
+    visit_list = []
 
-    for visit_start, instrument, detector in visits:
+    for visit_start, instrument, detector in visit_data:
+        # Creates file structure for instruments and detectors
         if not os.path.exists(instrument):
             os.mkdir(instrument)
         if not os.path.exists(os.path.join(instrument, detector)):
             os.mkdir(os.path.join(instrument, detector))
 
+        # Creates file structure for visits
         num_previous_visits = len(glob(os.path.join(instrument, detector, 'visit*')))
         visit_folder = os.path.join(instrument, detector, 'visit%i' % (num_previous_visits + 1))
+        visit = 'visit%i' % (num_previous_visits + 1) # Adds visit to list for output
 
         if not os.path.exists(visit_folder):
             os.mkdir(visit_folder)
 
-        for f in get_raw_image_filenames():
+        filters = []
+        # Creates file structure for filters
+        for f in images:
             same_visit = np.abs(float(fits.getval(f, 'EXPSTART')) - visit_start) < 0.5
             if "flc.fits" in f:
                 same_visit &= fits.getval(f, 'DETECTOR').lower() == detector
@@ -257,6 +276,10 @@ def sort_raw_data():
                 if not os.path.exists(folder_name):
                     os.mkdir(folder_name)
                 shutil.copy(f, folder_name + '/')
+                filters.append(get_filter_name(f)) # Adds filter to list for output
+        visit_list.append({"visit" : visit, "instrument" : instrument,
+                           "detector" : detector, "filters" : filters})
+    return visit_list
 
 
 if __name__ == '__main__':
