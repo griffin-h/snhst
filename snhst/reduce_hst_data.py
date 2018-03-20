@@ -19,17 +19,21 @@ def run(center=None, ground_reference=None, options=None):
     if options is None:
         options = {}
 
-    # Make sure the position of interest is in the raw frame
-    remove_images_without_object()
-
-    # Copy the raw files into the raw directory
-    copy_raw_data()
+    # Unzip images
+    os.system('gunzip *.fits.gz')
 
     # Download the reference images
     download_reference_images()
 
+    # Copy the raw files into the raw directory
+    copy_raw_data()
+
+    # Make sure the position of interest is in the raw frame
+    if center is not None:
+        remove_images_without_object(center['ra'], center['dec'])
+
     # sort the data into instrument/visit/filter
-    sort_raw_data()
+    visit_meta_data = sort_raw_data()
 
     # Make the overall HST template image
     if reference_image is not None:
@@ -153,7 +157,7 @@ def remove_images_without_object(ra, dec):
 def image_includes_coordinate(image, ra, dec):
     image_hdu = fits.open(image)
     for hdu in image_hdu:
-        if hdu.header['EXTNAME'] == 'SCI':
+        if 'EXTNAME' in hdu.header and hdu.header['EXTNAME'] == 'SCI':
             image_wcs = WCS(hdu.header)
 
             # Use zero indexed here for the pixel coordinates
@@ -183,8 +187,8 @@ def download_reference_images():
         os.mkdir('ref')
     os.environ['CRDS_SERVER_URL'] = 'https://hst-crds.stsci.edu'
     os.environ['CRDS_PATH'] = os.getcwd() + '/ref/'
-    os.system('python -m crds.bestrefs --update-bestrefs --sync-references=1 --files raw/*flc.fits')
-    os.system('python -m crds.bestrefs --update-bestrefs --sync-references=1 --files raw/*c0m.fits')
+    os.system('python -m crds.bestrefs --update-bestrefs --sync-references=1 --files *flc.fits')
+    os.system('python -m crds.bestrefs --update-bestrefs --sync-references=1 --files *c0m.fits')
 
 
 def get_filter_name(image):
