@@ -37,7 +37,7 @@ def run_tweakreg(options):
 
 
 def make_raw_tmp_filename(filename):
-    return filename[:-8] + 'rawtmp.fits'
+    return filename.replace('.fits', '.rawtmp.fits')
 
 
 def copy_data(image_data_from, image_data_to):

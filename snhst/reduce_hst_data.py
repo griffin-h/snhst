@@ -7,7 +7,7 @@ from astropy.io import fits
 from astropy.wcs import WCS
 from astropy import table
 
-from snhst import drizzle, dolphot, wcs
+from snhst import drizzle, dolphot, wcs, fits_utils
 import reproject
 import sep
 
@@ -17,138 +17,177 @@ logging.basicConfig(level=logging.INFO)
 
 def run(center=None, ground_reference=None, options=None):
     if options is None:
-        options = {}
+        options = {'sep': {'thresh': 5.},
+                   'dolphot': {},
+                   'dolphot_img': {},
+                   'dolphot_sky': {}}
+
+    global topdir
+    topdir = os.getcwd()
 
     # Unzip images
-    os.system('gunzip *.fits.gz')
+    if glob('*.fits.gz'):
+        os.system('gunzip *.fits.gz')
 
     # Download the reference images
-    download_reference_images()
+    if not os.path.exists('ref/'):
+        download_reference_images()
 
     # Copy the raw files into the raw directory
-    copy_raw_data()
+    if not os.path.exists('raw/'):
+        copy_raw_data()
+
+    # output coords from header of ground reference, if not given
+    if center is None and ground_reference is not None:
+        center['ra'], center['dec'] = get_target_coordinates(ground_reference)
+
+    raw_images = get_raw_image_filenames()
 
     # Make sure the position of interest is in the raw frame
     if center is not None:
-        remove_images_without_object(center['ra'], center['dec'])
+        remove_images_without_object(center['ra'], center['dec'], raw_images)
+        options['ra'], options['dec'] = center['ra'], center['dec']
 
     # sort the data into instrument/visit/filter
-    visit_meta_data = sort_raw_data()
+    visit_meta_data = sort_raw_data(raw_images)
+    hst_reference = get_default_reference_hst(visit_meta_data)
+    instrument_string = go_to_visit(hst_reference)
 
     # Make the overall HST template image
-    if reference_image is not None:
-        options['ra'], options['dec'] = get_center_of_image(reference_image)
+    if ground_reference is not None:
 
-        hst_reference = get_default_reference_hst()
-        # Drizzle the desired reference HST visit to the desired center
-        os.chdir(os.path.join(hst_reference['instrument'], hst_reference['visit'], hst_reference['filter']))
-        os.mkdir('match_template')
-        os.chdir('match_template')
-        shutil.copy('../*fl?.fits', './')
-        # Run dolphot on the hst image to build the catalog
+        drizzled_template_filename, drizzled_template_catalog = match_and_drizzle('match_template', instrument_string, options)
+        drizzled_template_header = fits.getheader(drizzled_template_filename, extname='SCI')
 
-        drizzle.drizzle(hst_reference['instrument'], 'match_template', options)
-        drizzled_template_filename = glob('match_template_dr?.fits')[0]
+        # Get the science hdu of the ground reference (may be compressed)
+        reference_hdulist = fits.open(os.path.join(topdir, ground_reference))
+        for reference_hdu in reference_hdulist:
+            if reference_hdu.header.get('NAXIS'):
+                break
 
-        # Resample the ground image to the same WCS as the HST frame
-        reference_hdu = fits.open(reference_image)
+        if not os.path.exists('ground_reference.cat'):
+            # Reproject ground image onto drizzled HST frame
+            data, footprint = reproject.reproject_interp(reference_hdu, drizzled_template_header)
+            # Run sep on the ground image to make the ground catalog
+            make_sep_catalog(data, options['sep'], 'match_template/ground_reference.cat')
 
-        data, footprint = reproject.reproject_interp(reference_hdu, fits.getheader(drizzled_template_filename),)
-        # Run sep on the ground image to make the ground catalog
-        try:
-            bkg = sep.Background(data, bw=32, bh=32, fw=3, fh=3)
-        except ValueError:
-            data = data.byteswap(True).newbyteorder()
-            bkg = sep.Background(data, bw=32, bh=32, fw=3, fh=3)
-
-        sources = sep.extract(data, options['sep']['threshold'], minarea=options['sep']['min_area'],
-                              err=np.sqrt(data), deblend_cont=0.005)
-
-        t = table.Table(sources)
-        kronrad, krflag = sep.kron_radius(data, sources['x'], sources['y'],
-                                          sources['a'], sources['b'],
-                                          sources['theta'], 6.0)
-
-        flux, fluxerr, flag = sep.sum_ellipse(data, sources['x'], sources['y'],
-                                              sources['a'], sources['b'],
-                                              np.pi / 2.0, 2.5 * kronrad,
-                                              subpix=1, err=error)
-
-        t['x'] += 1
-        t['y'] += 1
-        t['flux'] = flux
-        t['fluxerr']
-        t['mag'] = -2.5 * np.log10(t['flux'])
-        t['magerr'] = np.log(10) / 2.5 * t['fluxerr'] / t['flux']
-
-        t = t['x', 'y', 'mag', 'magerr']
-        t.writeto('reference.cat', format='fast_no_header')
-
-        # Run dolphot on the HST image
-        dolphot.dolphot(drizzled_template_filename, options['default_images'])
-
-        wcs.parse_dolphot_table('dolphot/dp.out', drizzled_template_filename, 'hst.cat')
-        # Calculate the offset between the frames (and apply them)
-        offsets = wcs.calculate_wcs_offset(drizzled_template_filename, 'hst.cat',
-                                           drizzled_template_filename, 'reference.cat')
-
-        # Update the raw hst frames with the calculated offset
-        os.mkdir('../hst_template')
-        os.chdir('../hst_template')
-        shutil.copy('../*fl?.fits', './')
-        wcs.apply_offsets(glob('*fl?.fits', offsets))
-
-        drizzle.drizzle(hst_reference['instrument'], 'hst_template', options)
-        shutil.copy('*dr?.fits', topdir)
+        # Calculate the offset between the frames
+        # (both catalogs are projected to the WCS of the drizzled template)
+        offsets = wcs.calculate_wcs_offset(drizzled_template_header, drizzled_template_catalog, 'match_template/ground_reference.cat', max_offset=2.)
     else:
-        # Drizzle the reference image
-        os.chdir(os.path.join(hst_reference['instrument'], hst_reference['visit'], hst_reference['filter']))
-        hst_reference = get_default_reference_hst()
-        drizzle.drizzle(hst_reference['instrument'], 'hst_template', options)
-        dolphot.dolphot(drizzled_template_filename, options['default_images'])
-        shutil.copy('hst_template_dr?.fits', topdir)
+        offsets = None
 
-    instruments, visits, filters = get_visit_info(images)
-    # For each instrument
-    for instrument in instruments:
-        # Drizzle the desired reference visit given the desired pixel scale and image size
-        instrument_template = get_instrument_template_visit(instrument, visits[insturment], filters[instrument])
-        drizzle_and_match(hst_reference, options)
+    hst_reference_filename, hst_reference_catalog = match_and_drizzle('hst_template', instrument_string, options, offsets)
 
-    for instrument in instruments:
-        for visit in visits:
-            for f in filters:
-                drizzle_and_match(insturment_reference, options)
-                # Copy the files into a master dolphot directory
-                shutil.copy("*fl?.fits", topdir +'/dolphot/')
+    # drizzle each visit separately
+    for visit in visit_meta_data:
+        if (visit == hst_reference).all():
+            continue
+        instrument_string = go_to_visit(visit)
+        visit_template_filename, visit_template_catalog = match_and_drizzle('match_template', instrument_string, options)
+        visit_template_header = fits.getheader(visit_template_filename, extname='SCI')
+        offsets = wcs.calculate_wcs_offset(visit_template_header, visit_template_catalog, hst_reference_catalog, max_offset=2.)
+        match_and_drizzle('hst_template', instrument_string, options, offsets)
 
-    # Run dolphot on the master dolphot directory
-    os.chdir(topdir + '/dolphot/')
-    dolphot.dolphot(new_hst_template, '*')
+    # drizzle all visits together
+    output_images = visit_meta_data.group_by(['instrument', 'detector', 'subarray', 'filter'])
+    for output_image in output_images.groups.keys:
+        instrument_string = go_to_visit(output_image)
+        for image in get_raw_image_filenames('visit*'):
+            fits_utils.copy_if_not_exists(image, '.')
+        filter_template_filename, filter_template_catalog = match_and_drizzle('match_template', instrument_string, options)
+        filter_template_header = fits.getheader(filter_template_filename, extname='SCI')
+        offsets = wcs.calculate_wcs_offset(filter_template_header, filter_template_catalog, hst_reference_catalog, max_offset=2.)
+        match_and_drizzle('hst_template', instrument_string, options, offsets)
 
-    # Convert the dolphot catalog to a fits file
-    dolphot.parse_catalog()
+    # TODO: THESE ARE NOT DEFINED YET
+    # # Run dolphot again with fake stars
+    # dolphot.add_fake_stars()
 
-    # Run dolphot again with fake stars
-    dolphot.add_fake_stars()
-    # Copy the final drizzled frames, cosmic ray removed frames, and the dolphot catalog to
-    # a top directory
-    sort_final_data()
-
-
-def drizzle_and_match(template_image, options):
-    # Run dolphot to make the photometry catalog for each visit/filter
-    # Calculate the offset between the drizzled frame and the reference visit
-    # update the raw files
-    # redrizzle the images with the updated offsets
-    pass
+    # # Copy the final drizzled frames, cosmic ray removed frames, and the dolphot catalog to
+    # # a top directory
+    # sort_final_data()
 
 
-def remove_images_without_object(ra, dec):
-    if not os.path.exists('unused'):
-        os.mkdir('unused')
+def go_to_visit(visit):
+    instrument_string = '_'.join(visit[['instrument', 'detector']])
+    if visit['subarray']:
+        instrument_string += '_sub'
+    else:
+        instrument_string += '_full'
+    visit_path = os.path.join(topdir, visit['instrument'], visit['detector'], visit['filter'])
+    if 'visit' in visit.colnames:
+        visit_path = os.path.join(visit_path, 'visit{:d}'.format(visit['visit']))
+    os.chdir(visit_path)
 
-    images = get_raw_image_filenames(raw_directory='.')
+    return instrument_string
+
+
+def mkdir_p(path):
+    '''Makes a directory if it does not already exist. Equivalent to bash `mkdir -p`.'''
+    if not os.path.exists(path):
+        os.makedirs(path)
+
+
+def make_sep_catalog(data, options, output_catalog):
+    try:
+        bkg = sep.Background(data, bw=32, bh=32, fw=3, fh=3)
+    except ValueError:
+        data = data.byteswap(True).newbyteorder()
+        bkg = sep.Background(data, bw=32, bh=32, fw=3, fh=3)
+
+    error = np.sqrt(data)
+    sources = sep.extract(data, err=error, deblend_cont=0.005, **options)
+
+    t = table.Table(sources)
+    kronrad, krflag = sep.kron_radius(data, sources['x'], sources['y'],
+                                      sources['a'], sources['b'],
+                                      sources['theta'], 6.0)
+
+    flux, fluxerr, flag = sep.sum_ellipse(data, sources['x'], sources['y'],
+                                          sources['a'], sources['b'],
+                                          np.pi / 2.0, 2.5 * kronrad,
+                                          subpix=1, err=error)
+
+    t['x'] += 1
+    t['y'] += 1
+    t['mag'] = -2.5 * np.log10(flux)
+    t['magerr'] = np.log(10) / 2.5 * fluxerr / flux
+
+    t = t['x', 'y', 'mag', 'magerr']
+    t.write(output_catalog, format='ascii.fast_no_header')
+
+
+def match_and_drizzle(basename, instrument_string, options, offsets=None):
+    initial_directory = os.getcwd()
+
+    # Update the raw hst frames with the calculated offset
+    mkdir_p(basename)
+    for image in get_raw_image_filenames('.'):
+        fits_utils.copy_if_not_exists(image, basename)
+    os.chdir(basename)
+    if offsets is not None:
+        wcs.apply_offsets(get_raw_image_filenames('.'), offsets)
+
+    # Drizzle the reference image
+    drizzled_templates = glob(basename + '_dr?.fits')
+    if not drizzled_templates:
+        drizzle.drizzle(instrument_string, basename, options)
+        drizzled_templates = glob(basename + '_dr?.fits')
+    drizzled_template_filename = os.path.abspath(drizzled_templates[0])
+
+    # Run dolphot on the hst image to build the catalog
+    dolphot.dolphot(drizzled_template_filename, get_raw_image_filenames('.'), options)
+    output_cat = os.path.abspath(basename + '.cat')
+    wcs.parse_dolphot_table('dolphot/dp.out', output_cat)
+
+    os.chdir(initial_directory)
+
+    return drizzled_template_filename, output_cat
+
+
+def remove_images_without_object(ra, dec, images):
+    mkdir_p('unused')
     for image in images:
         if not image_includes_coordinate(image, ra, dec):
             shutil.move(image, 'unused/')
@@ -156,39 +195,39 @@ def remove_images_without_object(ra, dec):
 
 def image_includes_coordinate(image, ra, dec):
     image_hdu = fits.open(image)
+    coordinate_in_image = False
     for hdu in image_hdu:
-        if 'EXTNAME' in hdu.header and hdu.header['EXTNAME'] == 'SCI':
+        if hdu.header.get('EXTNAME') == 'SCI':
             image_wcs = WCS(hdu.header)
 
             # Use zero indexed here for the pixel coordinates
-            coordinate_in_pixels = image_wcs.all_world2pix(ra, dec, 0)
-
-            coordinate_in_image = False
+            coordinate_in_pixels = image_wcs.all_world2pix([[ra, dec]], 0)
             coordinate_not_negative = np.all(coordinate_in_pixels > 0)
-            coordinate_not_outside = np.all(coordinate_in_pixels >= np.array([hdu.header['NAXIS2'],
-                                                                              hdu.header['NAXIS1']]))
+            coordinate_not_outside = np.all(coordinate_in_pixels < np.array([hdu.header['NAXIS2'],
+                                                                             hdu.header['NAXIS1']]))
             if coordinate_not_negative and coordinate_not_outside:
                 coordinate_in_image = True
+                break
 
-    image.close()
+    image_hdu.close()
     return coordinate_in_image
 
 
 def copy_raw_data():
-    if not os.path.exists('raw'):
-        os.mkdir('raw')
+    mkdir_p('raw')
     fs = glob('*.fits')
     for f in fs:
-        shutil.move(f, 'raw/')
+        fits_utils.copy_if_not_exists(f, 'raw/')
 
 
 def download_reference_images():
-    if not os.path.exists('ref'):
-        os.mkdir('ref')
+    mkdir_p('ref')
     os.environ['CRDS_SERVER_URL'] = 'https://hst-crds.stsci.edu'
     os.environ['CRDS_PATH'] = os.getcwd() + '/ref/'
-    os.system('python -m crds.bestrefs --update-bestrefs --sync-references=1 --files *flc.fits')
-    os.system('python -m crds.bestrefs --update-bestrefs --sync-references=1 --files *c0m.fits')
+    if glob('*flc.fits'):
+        os.system('python -m crds.bestrefs --update-bestrefs --sync-references=1 --files *flc.fits')
+    if glob('*c0m.fits'):
+        os.system('python -m crds.bestrefs --update-bestrefs --sync-references=1 --files *c0m.fits')
 
 
 def get_filter_name(image):
@@ -206,15 +245,32 @@ def get_filter_name(image):
     return f.lower()
 
 
-def get_raw_image_filenames(raw_directory='./raw'):
-    images = []
-    for ftype in ['flc', 'c0m']:
-        images += glob(os.path.join(raw_directory, '*{0}.fits'.format(ftype)))
+def get_raw_image_filenames(raw_directory='raw'):
+    for ftype in ['flc', 'flt', 'c0m']:
+        images = glob(os.path.join(raw_directory, '*{0}.fits'.format(ftype)))
+        if images:
+            break
     return images
 
 
-def within_half_day(expstart1, expstart2):
-    return np.abs(expstart1 - expstart2) > 0.5
+def get_default_reference_hst(visit_meta_data):
+    preferred_filters = ['f555w', 'f625w', 'f606w', 'f622w', 'f814w',
+                         'f791w', 'f438w', 'f435w', 'f110w', 'f160w']
+    for filt in preferred_filters:
+        if filt in visit_meta_data['filter']:
+            visit = visit_meta_data[visit_meta_data['filter'] == filt][0]
+            break
+    else: # choose the central filter
+        visit_meta_data.sort('filter')
+        visit = visit_meta_data[len(visit_meta_data) // 2]
+    return visit
+
+
+def get_target_coordinates(flt_file):
+    hdulist = fits.open(flt_file)
+    RA = hdulist[0].header['RA_TARG']
+    Dec = hdulist[0].header['DEC_TARG']
+    return [RA, Dec]
 
 
 def get_unique_visits(images):
@@ -224,66 +280,38 @@ def get_unique_visits(images):
     instruments = np.array([fits.getval(image, 'INSTRUME').lower() for image in images])[sorted_start_inds]
     detectors = np.array([fits.getval(image, 'DETECTOR').lower() if 'flc.fits' in image else "wfpc2"
                           for image in images])[sorted_start_inds]
-
+    # group images by start time & instrument
     unique_exposure_visits = [(x, instruments[i], detectors[i]) for i, x in
                               enumerate(exposure_start_mjds[:-1])
-                              if within_half_day(x, exposure_start_mjds[i + 1]) or detectors[i] != detectors[i + 1]]
+                              if np.abs(x - exposure_start_mjds[i + 1]) > min_visit_separation
+                              or detectors[i] != detectors[i + 1]]
     unique_exposure_visits.append((exposure_start_mjds[-1], instruments[-1], detectors[-1]))
     return unique_exposure_visits
 
 
-def get_default_reference_hst(visit_meta_data, options=None):
-    return visit_meta_data[0]
+def sort_raw_data(images, min_visit_separation=0.2):
+    metadata = table.Table()
+    metadata['filename'] = images
+    metadata['expstart'] = [fits.getval(image, 'EXPSTART') for image in images]
+    metadata['instrument'] = np.char.lower([fits.getval(image, 'INSTRUME') for image in images])
+    metadata['detector'] = np.char.lower([fits.getval(image, 'DETECTOR') for image in images])
+    metadata['filter'] = [get_filter_name(image) for image in images]
+    metadata['subarray'] = [fits.getval(image, 'SUBARRAY') for image in images]
+    metadata['visit'] = np.ones(len(metadata), int)
+    metadata.sort('expstart')
+    visit_starts, = np.where(np.diff(metadata['expstart']) > min_visit_separation)
+    for visit_num, first_row in enumerate(visit_starts):
+        metadata['visit'][first_row + 1:] = visit_num + 2
 
+    for image in metadata:
+        folder_name = os.path.join(image['instrument'], image['detector'], image['filter'],
+                                   'visit{:d}'.format(image['visit']))
+        mkdir_p(folder_name)
+        fits_utils.copy_if_not_exists(image['filename'], folder_name)
 
-def get_center_coordinates(flt_file):
-    from astropy.io import fits # If not already imported
-    hdulist = fits.open(flt_file)
-    RA = hdulist[0].header['RA_TARG']
-    Dec = hdulist[0].header['DEC_TARG']
-    return [RA, Dec]
+    visit_list = metadata.group_by(['instrument', 'detector', 'filter', 'visit', 'subarray'])
 
-
-def sort_raw_data():
-    images = get_raw_image_filenames()
-
-    visit_data = get_unique_visits(images)
-    # Sets up lists for each of the following for output as a dictionary
-    visit_list = []
-
-    for visit_start, instrument, detector in visit_data:
-        # Creates file structure for instruments and detectors
-        if not os.path.exists(instrument):
-            os.mkdir(instrument)
-        if not os.path.exists(os.path.join(instrument, detector)):
-            os.mkdir(os.path.join(instrument, detector))
-
-        # Creates file structure for visits
-        num_previous_visits = len(glob(os.path.join(instrument, detector, 'visit*')))
-        visit_folder = os.path.join(instrument, detector, 'visit%i' % (num_previous_visits + 1))
-        visit = 'visit%i' % (num_previous_visits + 1) # Adds visit to list for output
-
-        if not os.path.exists(visit_folder):
-            os.mkdir(visit_folder)
-
-        filters = []
-        # Creates file structure for filters
-        for f in images:
-            same_visit = np.abs(float(fits.getval(f, 'EXPSTART')) - visit_start) < 0.5
-            if "flc.fits" in f:
-                same_visit &= fits.getval(f, 'DETECTOR').lower() == detector
-            else:
-                same_visit &= detector == 'wfpc2'
-            same_visit &= fits.getval(f, 'INSTRUME').lower() == instrument
-            if same_visit:
-                folder_name = os.path.join(visit_folder, get_filter_name(f))
-                if not os.path.exists(folder_name):
-                    os.mkdir(folder_name)
-                shutil.copy(f, folder_name + '/')
-                filters.append(get_filter_name(f)) # Adds filter to list for output
-        visit_list.append({"visit" : visit, "instrument" : instrument,
-                           "detector" : detector, "filters" : filters})
-    return visit_list
+    return visit_list.groups.keys
 
 
 if __name__ == '__main__':

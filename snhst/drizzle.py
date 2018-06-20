@@ -7,10 +7,10 @@ from snhst.find_offsets import run_tweakreg
 from snhst.cosmic_rays import detect_cosmic_rays
 
 
-def drizzle(instrument, output_name, options):
+def drizzle(instrument_string, output_name, options):
     # Based on the instrument, get the default parameter values
-    # Override any parameters that were provided by the user
-    drizzle_options = get_drizzle_parameters(instrument, options)
+    # Keep any parameters that were provided by the user
+    drizzle_options = get_drizzle_parameters(instrument_string, options)
 
     # If we want to find shifts
     # find the shifts comparing to the template image (either the first image of the set
@@ -75,7 +75,7 @@ def run_astrodrizzle(output_name, drizzle_options):
     no_data = sci_data < -49999.0
     sci_data[no_data] = 0.0
 
-    sci_hdu.writeto(output_filename, clobber=True)
+    sci_hdu.writeto(output_filename, overwrite=True)
 
 
 def clean_cosmic_rays(options):

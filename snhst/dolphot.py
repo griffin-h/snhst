@@ -7,12 +7,12 @@ from glob import glob
 from astropy.io import fits
 from snhst import parameters
 from reproject import reproject_interp
+from snhst import reduce_hst_data
 
 
 def dolphot(template_image, images, options):
     # Copy the raw input files into a new directory
-    if not os.path.exists('dolphot'):
-        os.mkdir('dolphot')
+    reduce_hst_data.mkdir_p('dolphot')
 
     for image in images:
         fits_utils.copy_if_not_exists(image, 'dolphot')
@@ -22,7 +22,7 @@ def dolphot(template_image, images, options):
     os.chdir('dolphot')
 
     for image in images:
-        instrument, detector = fits_utils.get_instrument(image).split('_')
+        instrument, detector, _ = fits_utils.get_instrument(image).split('_')
 
         if needs_to_be_masked(image):
             mask_image(instrument, image)
@@ -30,14 +30,18 @@ def dolphot(template_image, images, options):
         if needs_to_split_groups(image):
             split_groups(image)
 
+    if needs_to_split_groups(template_image):
+        split_groups(template_image)
+    template_image = template_image.replace('.fits', '.chip1.fits')
+
     overlapping_images = get_overlapping_split_images(template_image, images)
 
     for image in overlapping_images:
         if needs_to_calc_sky(image):
-            calc_sky(image, options)
+            calc_sky(image, options['dolphot_sky'])
 
     if need_to_run_dolphot():
-        run_dolphot(template_image, images, options)
+        run_dolphot(template_image, overlapping_images, options)
 
     os.chdir('..')
 
@@ -59,15 +63,18 @@ def mask_image(instrument, image):
 
 
 def needs_to_calc_sky(image):
-    return not os.path.exists(image)
+    return not os.path.exists(image.replace('.fits', '.sky.fits'))
 
 
 def calc_sky(image, options):
     calcsky_opts = parameters.get_calcsky_parameters(image, options)
-    cmd = 'calcsky {image} {rin} {rout} {step} {sigma_low} {sigma_high}")'
-    os.system(cmd.format(image=image, rin=calcsky_opts['r_in'], rout=calcsky_opts['r_out'],
-                         step=calcsky_opts['step'], sigma_low=calcsky_opts['sigma_low'],
-                         sigma_high=calcsky_opts['sigma_high']))
+    cmd = 'calcsky {image} {rin} {rout} {step} {sigma_low} {sigma_high}'
+    cmd = cmd.format(image=image.replace('.fits', ''), rin=calcsky_opts['r_in'],
+                     rout=calcsky_opts['r_out'], step=calcsky_opts['step'],
+                     sigma_low=calcsky_opts['sigma_low'],
+                     sigma_high=calcsky_opts['sigma_high'])
+    print(cmd)
+    os.system(cmd)
 
 
 def needs_to_split_groups(image):
@@ -84,7 +91,7 @@ def get_overlapping_split_images(template_image, images):
     for image in images:
         split_images = glob(image.replace('.fits', '.chip?.fits'))
         for split_image in split_images:
-            header = fits.getheader(image)
+            header = fits.getheader(split_image)
             # remap the template_image onto the image
             _, footprint = reproject_interp(template_hdu, header)
             # If the overlap is at least 10%, consider the image to be overlapping
@@ -99,24 +106,25 @@ def need_to_run_dolphot():
 
 def write_dolphot_image_parameters(file_object, image, i, options):
     file_object.write('img{i}_file = {file}\n'.format(i=i + 1, file=os.path.splitext(image)[0]))
-    for par, value in parameters.get_dolphot_instrument_parameters(image, options).items:
-        file_object.write('image{i}_{option} = {value}'.format(i=i + 1, option=par, value=value))
+    for par, value in parameters.get_dolphot_instrument_parameters(image, options).items():
+        file_object.write('img{i}_{option} = {value}\n'.format(i=i + 1, option=par, value=value))
 
 
 def write_dolphot_master_parameters(file_object, options):
-    for par, value in options['dolphot'].items():
+    for par, value in options.items():
         file_object.write('{par} = {value}\n'.format(par=par, value=value))
 
 
 def run_dolphot(template_image, images, options):
     f = open('dp.params','w')
-    write_dolphot_master_parameters(f, options)
-    f.write('Nimg = {n}\n'.format(len(images)))
+    parameters.set_default_parameters(options['dolphot'], parameters.global_defaults['dolphot'])
+    write_dolphot_master_parameters(f, options['dolphot'])
+    f.write('Nimg = {n}\n'.format(n=len(images)))
     f.write('img0_file = {drzfile}\n'.format(drzfile=os.path.splitext(template_image)[0]))
     for i, image in enumerate(images):
-        write_dolphot_image_parameters(f, image, i, options)
+        write_dolphot_image_parameters(f, image, i, options['dolphot_img'])
     f.close()
-    os.system('dolphot dp.out -pdp.params 2 &> 1 | tee -a dp.log')
+    os.system('dolphot dp.out -pdp.params 2>&1 | tee -a dp.log')
 
 
 def cut_bad_dolphot_sources(catalog):
@@ -127,3 +135,10 @@ def cut_bad_dolphot_sources(catalog):
     # Crowding cut
     catalog = catalog[catalog['col10'] < 0.5]
     return catalog
+
+
+def add_fake_stars():
+    os.system('fakelist dp.out WFC3_F300X WFC3_F625W 2>&1 | tee -a fakelist.out')
+    with open('dp.params', 'a') as f:
+        f.write('FakeStars = fakelist.out\n')
+    os.system('dolphot dp_fake.out -pdp.params 2>&1 | tee -a dp_fake.log')

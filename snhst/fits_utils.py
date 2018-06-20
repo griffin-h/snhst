@@ -8,7 +8,7 @@ def is_sci_extension(hdu):
 
 
 def copy_if_not_exists(filename, path):
-    if not os.path.exists(os.path.join(path, filename)):
+    if not os.path.exists(os.path.join(path, os.path.basename(filename))):
         shutil.copy(filename, path)
 
 
@@ -20,7 +20,7 @@ def get_instrument(filename):
         subarray = 'full'
     else:
         detector = hdu[0].header['DETECTOR'].lower()
-        if hdu[0].header['SUBARRAY'].upper() == 'T':
+        if hdu[0].header['SUBARRAY']:
             subarray = "sub"
         else:
             subarray = "full"

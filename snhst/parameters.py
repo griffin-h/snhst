@@ -11,6 +11,7 @@ global_defaults = {'template_image': None,
                    'use_tweakshifts': True,
                    'tweakshifts_threshold': 10,
                    'dolphot': {'FitSky': 2,
+                               'SkipSky': 2,
                                'RCombine': 1.5,
                                'SkySig': 2.25,
                                'SecondPass': 5,
@@ -67,27 +68,27 @@ instrument_defaults = {'wfc3': {'env_ref': 'iref', 'group': '', 'driz_bits': 0, 
 detector_defaults = {'wfc3_uvis': {'nx': 5200, 'ny': 5200, 'input_files': '*_flc.fits',
                                    'dolphot_sky': {'r_in': 15, 'r_out': 35, 'step': 4,
                                                    'sigma_low': 2.25, 'sigma_high': 2.00},
-                                   'dolphot': {'apsky': '15 25', 'RAper': 2, 'RChi': 1.5,
-                                               'RPSF': 10, 'SkipSky': 2, 'RSky': '15 35',
+                                   'dolphot_img': {'apsky': '15 25', 'RAper': 2, 'RChi': 1.5,
+                                               'RPSF': 10, 'RSky': '15 35',
                                                'RSky2': '3 6'}},
                      'wfc3_ir': {'driz_bits': 512, 'nx': 1700, 'ny': 1700, 'pixel_scale': 0.09,
                                  'dolphot_sky': {'r_in': 10, 'r_out': 25, 'step': 2,
                                                  'sigma_low': 2.25, 'sigma_high': 2.00},
-                                 'dolphot': {'apsky': '15 25', 'RAper': 2, 'RChi': 1.5,
+                                 'dolphot_img': {'apsky': '15 25', 'RAper': 2, 'RChi': 1.5,
                                              'RPSF': 10, 'SkipSky': 1, 'RSky': '8 20',
                                              'RSky2': '3 6'}},
                      'acs_wfc': {'nx': 5200, 'ny': 5200, 'input_files': '*_flc.fits',
                                  'dolphot_sky': {'r_in': 15, 'r_out': 35, 'step': 4,
                                                  'sigma_low': 2.25, 'sigma_high': 2.00},
-                                 'dolphot': {'apsky': '15 25', 'RAper': 2, 'RChi': 1.5,
-                                             'RPSF': 10, 'SkipSky': 2, 'RSky': '15 35',
+                                 'dolphot_img': {'apsky': '15 25', 'RAper': 2, 'RChi': 1.5,
+                                             'RPSF': 10, 'RSky': '15 35',
                                              'RSky2': '3 6'}
                                  },
                      'wfpc2_wfpc2': {'nx': 5200, 'ny': 5200,
                                      'dolphot_sky': {'r_in': 10, 'r_out': 25, 'step': 2,
                                                      'sigma_low': 2.25, 'sigma_high': 2.00},
-                                     'dolphot': {'apsky': '15 25', 'RAper': 2, 'RChi': 1.5,
-                                                 'RPSF': 10, 'SkipSky': 2, 'RSky': '15 35',
+                                     'dolphot_img': {'apsky': '15 25', 'RAper': 2, 'RChi': 1.5,
+                                                 'RPSF': 10, 'RSky': '15 35',
                                                  'RSky2': '3 6'}}}
 
 subarray_defaults = {'wfc3_uvis_full': {},
@@ -127,10 +128,12 @@ def get_drizzle_parameters(instrument_string, options):
 def get_calcsky_parameters(image, options):
     instrument_string = fits_utils.get_instrument(image)
     detector_string = "_".join(instrument_string.split('_')[:2])
-    return options[detector_string]['dolphot_sky']
+    set_default_parameters(options, detector_defaults[detector_string]['dolphot_sky'])
+    return options
 
 
 def get_dolphot_instrument_parameters(image, options):
     instrument_string = fits_utils.get_instrument(image)
     detector_string = "_".join(instrument_string.split('_')[:2])
-    return options[detector_string]['dolphot']
+    set_default_parameters(options, detector_defaults[detector_string]['dolphot_img'])
+    return options

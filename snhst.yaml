@@ -1,0 +1,17 @@
+name: snhst
+channels:
+    - http://ssb.stsci.edu/
+    - conda-forge
+dependencies:
+    - python=3
+    - ipython
+    - numpy
+    - matplotlib
+    - astropy
+    - scipy
+    # from STSci:
+    - drizzlepac
+    - reproject
+    - crds
+    # from conda-forge:
+    - sep
