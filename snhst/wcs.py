@@ -5,29 +5,16 @@ from astropy import wcs
 from astropy.io import fits
 from scipy import optimize
 
-from snhst.dolphot import cut_bad_dolphot_sources
 
-
-def calculate_wcs_offset(hst_header, hst_catalog, ref_catalog,
-                         n_stars=120, max_offset=0.1, origin=1):
-
-    # Make WCS object that applies to both catalogs
-    final_wcs = wcs.WCS(hst_header)
-
-    # Read in the ref_table x's, y's and convert to ra, dec
-    ref_table = read_catalog(ref_catalog)
-    ref_table['ra'], ref_table['dec'] = final_wcs.all_pix2world(ref_table['x'], ref_table['y'], origin)
-
-    hst_table = read_catalog(hst_catalog)
-    hst_table['ra'], hst_table['dec'] = final_wcs.all_pix2world(hst_table['x'], hst_table['y'], origin)
+def calculate_wcs_offset(hst_table, ref_table, n_stars=120, max_offset=0.1):
 
     # Choose the brightest objects that overlap both images (always assume the reference image
     # and the HST image have the same WCS and are the same shape)
     ref_table.sort('mag')
-    ref_table = ref_table[-n_stars:]
+    ref_table = ref_table[:n_stars]
 
     hst_table.sort('mag')
-    hst_table = hst_table[-n_stars:]
+    hst_table = hst_table[:n_stars]
 
     # Match the brighest objects between frames (the closest thing within ~0.1 arcsec)
     hst_skycoords = coordinates.SkyCoord(hst_table['ra'], hst_table['dec'], unit=('deg', 'deg'))
@@ -56,19 +43,8 @@ def read_catalog(catalog_filename):
     return table.Table.read(catalog_filename, format='ascii.fast_no_header', names=['x', 'y', 'mag', 'magerr'])
 
 
-def parse_dolphot_table(hst_table, output_catalog):
-    dolphot_catalog = table.Table.read(hst_table, format='ascii.fast_no_header')
-
-    dolphot_catalog = cut_bad_dolphot_sources(dolphot_catalog)
-    t = table.Table()
-    t['x'] = dolphot_catalog['col3'] + 0.5
-    t['y'] = dolphot_catalog['col4'] + 0.5
-    t['mag'] = dolphot_catalog['col17']
-    t['magerr'] = dolphot_catalog['col19']
-    t.write(output_catalog, format='ascii.fast_no_header', overwrite=True)
-
-
 def apply_offsets(images, offset):
+    '''Update the raw hst frames with the calculated offset'''
     for image in images:
         hdulist = fits.open(image)
         for hdu in hdulist:
@@ -77,3 +53,18 @@ def apply_offsets(images, offset):
                 hdr['CRVAL1'] += offset[0]
                 hdr['CRVAL2'] += offset[1]
         hdulist.writeto(image, overwrite=True)
+
+
+def offset_to_match(images, hst_header, hst_table, ref_table,
+                    n_stars=120, max_offset=0.1, origin=1):
+    # Make WCS object that applies to both catalogs
+    final_wcs = wcs.WCS(hst_header)
+
+    # Read in the ref_table x's, y's and convert to ra, dec
+    if 'ra' not in ref_table.colnames or 'dec' not in ref_table.colnames:
+        ref_table['ra'], ref_table['dec'] = final_wcs.all_pix2world(ref_table['x'], ref_table['y'], origin)
+    hst_table['ra'], hst_table['dec'] = final_wcs.all_pix2world(hst_table['x'], hst_table['y'], origin)
+
+    offsets = calculate_wcs_offset(hst_table, ref_table, n_stars, max_offset)
+
+    apply_offsets(images, offsets)
