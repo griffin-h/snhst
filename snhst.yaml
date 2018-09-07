@@ -1,6 +1,6 @@
 name: snhst
 channels:
-    - http://ssb.stsci.edu/
+    - http://ssb.stsci.edu/astroconda
     - conda-forge
 dependencies:
     - python=3
