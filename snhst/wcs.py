@@ -4,6 +4,7 @@ from astropy import table
 from astropy import wcs
 from astropy.io import fits
 from scipy import optimize
+import logging
 
 
 def calculate_wcs_offset(hst_table, ref_table, n_stars=120, max_offset=0.1):
@@ -23,6 +24,9 @@ def calculate_wcs_offset(hst_table, ref_table, n_stars=120, max_offset=0.1):
     match_id, separations, _ = hst_skycoords.match_to_catalog_sky(ref_skycoords)
     ref_table = ref_table[match_id][separations.arcsec < max_offset]
     hst_table = hst_table[separations.arcsec < max_offset]
+    if not np.any(separations.arcsec < max_offset):
+        logging.error('no matches found within {:.2} arcsec'.format(max_offset))
+        return 0, 0
 
     # set the initial guess to be what is already in the header of the HST image
     results = optimize.minimize(wcs_objective, [0, 0], args=(hst_table, ref_table), method='Nelder-Mead')
@@ -53,17 +57,10 @@ def apply_offsets(images, offset):
                 hdr['CRVAL1'] += offset[0]
                 hdr['CRVAL2'] += offset[1]
         hdulist.writeto(image, overwrite=True)
+        logging.info('offset {} by {:.6f}, {:.6f} deg'.format(image, offset[0], offset[1]))
 
 
-def offset_to_match(images, hst_header, hst_table, ref_table,
-                    n_stars=120, max_offset=0.1, origin=1):
-    # Make WCS object that applies to both catalogs
-    final_wcs = wcs.WCS(hst_header)
-
-    # Read in the ref_table x's, y's and convert to ra, dec
-    if 'ra' not in ref_table.colnames or 'dec' not in ref_table.colnames:
-        ref_table['ra'], ref_table['dec'] = final_wcs.all_pix2world(ref_table['x'], ref_table['y'], origin)
-    hst_table['ra'], hst_table['dec'] = final_wcs.all_pix2world(hst_table['x'], hst_table['y'], origin)
+def offset_to_match(images, hst_table, ref_table, n_stars=120, max_offset=0.1, origin=0):
 
     offsets = calculate_wcs_offset(hst_table, ref_table, n_stars, max_offset)
 

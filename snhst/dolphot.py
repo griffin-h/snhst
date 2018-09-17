@@ -10,6 +10,7 @@ from snhst import parameters
 from reproject import reproject_interp
 from snhst import reduce_hst_data
 from snhst import wcs
+from astropy.wcs import WCS
 import re
 
 
@@ -40,6 +41,9 @@ def dolphot(template_image, images, path, options):
     if not os.path.exists(dp_out):
         run_dolphot(template_image, overlapping_images, path, options)
     output_table = parse_dolphot_table(dp_out, os.path.join(path, 'hst.cat'))
+
+    hdr = fits.get_header(template_image)
+    output_table['ra'], output_table['dec'] = WCS(hdr).all_pix2world(output_table['x'], output_table['y'], 1)
 
     return output_table
 

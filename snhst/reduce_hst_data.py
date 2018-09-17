@@ -68,8 +68,8 @@ def run(**options):
         drizzled_template_header = fits.getheader(drizzled_template_filename, extname='SCI')
 
         if options['use_sep']:
-            data, mask = get_masked_data_for_sep(drizzled_template_filename)
-            drizzled_template_catalog = make_sep_catalog(data, options, mask=mask)
+            data, mask, drizzled_template_header = get_masked_data_for_sep(drizzled_template_filename)
+            drizzled_template_catalog = make_sep_catalog(data, drizzled_template_header, options, mask=mask)
         else:
             dolphot_path = os.path.join(match_template_path, 'dolphot')
             drizzled_template_catalog = dolphot.dolphot(drizzled_template_filename, images, dolphot_path, options)
@@ -77,22 +77,22 @@ def run(**options):
         if options['ground_reference_catalog'] is None:
             reference_hdu = fits_utils.get_data_extension(options['ground_reference'])
             # Reproject ground image onto drizzled HST frame
-            data, _ = reproject.reproject_interp(reference_hdu, drizzled_template_header)
+            drizzled_template_header = fits.getheader(drizzled_template_filename, extname='SCI')
+            ground_reference_data, _ = reproject.reproject_interp(reference_hdu, drizzled_template_header)
             # Run sep on the ground image to make the ground catalog
-            ground_reference_catalog = make_sep_catalog(data, options)
+            ground_reference_catalog = make_sep_catalog(ground_reference_data, drizzled_template_header, options)
         else:
             ground_reference_catalog = table.Table.read(options['ground_reference_catalog'], format='ascii')
 
         # Calculate the offset between the frames
         # (both catalogs are projected to the WCS of the drizzled template)
-        wcs.offset_to_match(hst_template_images, drizzled_template_header, drizzled_template_catalog,
-                            ground_reference_catalog, max_offset=2.)
+        wcs.offset_to_match(hst_template_images, drizzled_template_catalog, ground_reference_catalog, max_offset=2.)
 
     hst_reference_filename = drizzle.drizzle(hst_template_images, 'hst_template', options)
     options['refimage'] = hst_reference_filename + '[SCI]'
     if options['use_sep']:
-        data, mask = get_masked_data_for_sep(hst_reference_filename)
-        hst_reference_catalog = make_sep_catalog(data, options, mask=mask)
+        data, mask, hst_reference_header = get_masked_data_for_sep(hst_reference_filename)
+        hst_reference_catalog = make_sep_catalog(data, hst_reference_header, options, mask=mask)
     else:
         dolphot_path = os.path.join(hst_template_path, 'dolphot')
         hst_reference_catalog = dolphot.dolphot(hst_reference_filename, images, dolphot_path, options)
@@ -107,8 +107,8 @@ def run(**options):
 
         visit_template_filename = drizzle.drizzle(match_template_images, 'match_template', options)
         if options['use_sep']:
-            data, mask = get_masked_data_for_sep(visit_template_filename)
-            visit_template_catalog = make_sep_catalog(data, options, mask=mask)
+            data, mask, visit_template_header = get_masked_data_for_sep(visit_template_filename)
+            visit_template_catalog = make_sep_catalog(data, visit_template_header, options, mask=mask)
         else:
             dolphot_path = os.path.join(match_template_path, 'dolphot')
             visit_template_catalog = dolphot.dolphot(visit_template_filename, images, dolphot_path, options)
@@ -116,8 +116,7 @@ def run(**options):
         hst_template_path = os.path.join(visit_path, 'visit_template')
         hst_template_images = [utils.copy_if_not_exists(image, hst_template_path) for image in images]
 
-        visit_template_header = fits.getheader(visit_template_filename, extname='SCI')
-        wcs.offset_to_match(hst_template_images, visit_template_header, visit_template_catalog, hst_reference_catalog, max_offset=2.)
+        wcs.offset_to_match(hst_template_images, visit_template_catalog, hst_reference_catalog, max_offset=2.)
         visit_template_filename = drizzle.drizzle(hst_template_images, '_'.join(visit['visit', 'filter']), options)
         utils.copy_if_not_exists(visit_template_filename, 'final')
 
@@ -141,7 +140,7 @@ def run(**options):
     utils.copy_if_not_exists('dolphot/hst_fake.cat', 'final')
 
 
-def make_sep_catalog(data, options, mask=None):
+def make_sep_catalog(data, header, options, mask=None, min_sep=10., do_bgsub=False):
 
     try:
         bkg = sep.Background(data, mask, maskthresh=1, bw=32, bh=32, fw=3, fh=3)
@@ -163,22 +162,22 @@ def make_sep_catalog(data, options, mask=None):
                                           np.pi / 2.0, 2.5 * kronrad,
                                           subpix=1, err=error)
 
-    t['x'] += 1
-    t['y'] += 1
     t['mag'] = -2.5 * np.log10(flux)
     t['magerr'] = np.log(10) / 2.5 * fluxerr / flux
+    t['ra'], t['dec'] = WCS(header).all_pix2world(t['x'], t['y'], 0)
 
-    t = t['x', 'y', 'mag', 'magerr']
+    t = t['x', 'y', 'mag', 'magerr', 'ra', 'dec']
 
     return t
 
 
-def get_masked_data_for_sep(filename):
+def get_masked_data_for_sep(filename, bin_factor=32, thresh=0.7):
     hdulist = fits.open(filename)
     data = hdulist['SCI'].data
     weight = hdulist['WHT'].data
     mask = weight < 0.7 * np.max(weight)
-    return data, mask
+    header = hdulist['SCI'].header
+    return data, mask, header
 
 
 def remove_images_without_object(ra, dec, images):
