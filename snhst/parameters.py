@@ -46,6 +46,7 @@ global_defaults = {
     'sep': {
         'thresh': 20.,
         'deblend_cont': 0.005,
+        'minarea': 50.,
         },
     'fakelist': {
         'filter1': None,

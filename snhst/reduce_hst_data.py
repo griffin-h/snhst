@@ -6,6 +6,7 @@ import numpy as np
 from astropy.io import fits
 from astropy.wcs import WCS
 from astropy import table
+from astropy import nddata
 
 from snhst import drizzle, dolphot, wcs, fits_utils, utils, parameters
 import reproject
@@ -143,14 +144,23 @@ def run(**options):
 def make_sep_catalog(data, header, options, mask=None, min_sep=10., do_bgsub=False):
 
     try:
-        bkg = sep.Background(data, mask, maskthresh=1, bw=32, bh=32, fw=3, fh=3)
+        bkg = sep.Background(data, mask, bw=32, bh=32, fw=3, fh=3)
     except ValueError:
-        data = data.byteswap(True).newbyteorder()
-        bkg = sep.Background(data, mask, maskthresh=1, bw=32, bh=32, fw=3, fh=3)
+        data = data.byteswap().newbyteorder()
+        bkg = sep.Background(data, mask, bw=32, bh=32, fw=3, fh=3)
 
-    error = np.sqrt(data)
-    data_bgsub = data - bkg
+    if do_bgsub:
+        error = np.sqrt(data)
+        data_bgsub = data - bkg
+    else:
+        error = bkg.globalrms
+        data_bgsub = data
     sources = sep.extract(data_bgsub, err=error, mask=mask, **options['sep'])
+
+    dists = ((sources['x'] - sources['x'][:, np.newaxis])**2 +
+             (sources['y'] - sources['y'][:, np.newaxis])**2)**0.5
+    closest = np.partition(dists, 1)[:, 1]
+    sources = sources[closest > min_sep]
 
     t = table.Table(sources)
     kronrad, krflag = sep.kron_radius(data_bgsub, sources['x'], sources['y'],
@@ -159,7 +169,7 @@ def make_sep_catalog(data, header, options, mask=None, min_sep=10., do_bgsub=Fal
 
     flux, fluxerr, flag = sep.sum_ellipse(data_bgsub, sources['x'], sources['y'],
                                           sources['a'], sources['b'],
-                                          np.pi / 2.0, 2.5 * kronrad,
+                                          np.pi / 2.0, 2.5, # this was 2.5 * kronrad, but kronrad can't be nan
                                           subpix=1, err=error)
 
     t['mag'] = -2.5 * np.log10(flux)
@@ -175,8 +185,19 @@ def get_masked_data_for_sep(filename, bin_factor=32, thresh=0.7):
     hdulist = fits.open(filename)
     data = hdulist['SCI'].data
     weight = hdulist['WHT'].data
-    mask = weight < 0.7 * np.max(weight)
     header = hdulist['SCI'].header
+
+    binned = nddata.block_reduce(weight, bin_factor)
+    debinned = nddata.block_replicate(binned, bin_factor)
+
+    i0 = (weight.shape[0] - debinned.shape[0]) // 2
+    i1 = (debinned.shape[0] - weight.shape[0]) // 2
+    j0 = (weight.shape[1] - debinned.shape[1]) // 2
+    j1 = (debinned.shape[1] - weight.shape[1]) // 2
+
+    padded = np.pad(debinned, ((i0, -i1), (j0, -j1)), 'constant')
+    mask = padded < 0.7 * np.max(weight)
+
     return data, mask, header
 
 
