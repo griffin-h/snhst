@@ -132,13 +132,14 @@ def run(**options):
         filter_template_filename = drizzle.drizzle(hst_template_images, filt, options)
         utils.copy_if_not_exists(filter_template_filename, 'final')
 
-    # Run dolphot on all the images together (forced photometry on same positions)
-    dolphot.dolphot(hst_reference_filename, sum(offset_images_by_filter.values(), []), 'dolphot', options)
-    utils.copy_if_not_exists('dolphot/hst.cat', 'final')
+    if not options['use_sep']:
+        # Run dolphot on all the images together (forced photometry on same positions)
+        dolphot.dolphot(hst_reference_filename, sum(offset_images_by_filter.values(), []), 'dolphot', options)
+        utils.copy_if_not_exists('dolphot/hst.cat', 'final')
 
-    # Run dolphot again with fake stars
-    dolphot.add_fake_stars(visit_meta_data, 'dolphot', options['fakelist'])
-    utils.copy_if_not_exists('dolphot/hst_fake.cat', 'final')
+        # Run dolphot again with fake stars
+        dolphot.add_fake_stars(visit_meta_data, 'dolphot', options['fakelist'])
+        utils.copy_if_not_exists('dolphot/hst_fake.cat', 'final')
 
 
 def make_sep_catalog(data, header, options, mask=None, min_sep=10., do_bgsub=False):
