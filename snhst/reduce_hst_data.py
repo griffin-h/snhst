@@ -17,7 +17,7 @@ logging.basicConfig(level=logging.INFO)
 
 
 def run(**options):
-    '''Top level pipeline function to align and stack images and measure photometry.
+    """Top level pipeline function to align and stack images and measure photometry.
 
     Inputs are flexible, but keywords can include:
      - ra, dec: coordinates of the target in decimal degrees (default = center of ground_reference)
@@ -27,7 +27,7 @@ def run(**options):
      - dolphot_img: dictionary of image-specific dolphot parameters (see dolphot manual)
      - calcsky: dictionary of parameters to calcsky (r_in, r_out, step, sigma_low, sigma_high)
      - fakelist: dictionary of parameters to fakelist (filter1, filter2, filter1_min, filter1_max,
-                                                       color_min, color_max, nstar)'''
+                                                       color_min, color_max, nstar)"""
 
     parameters.set_default_parameters(options, parameters.global_defaults)
 
@@ -64,9 +64,7 @@ def run(**options):
 
         match_template_path = os.path.join(reference_path, 'match_ground')
         match_template_images = [utils.copy_if_not_exists(image, match_template_path) for image in images]
-
         drizzled_template_filename = drizzle.drizzle(match_template_images, 'match_ground', options)
-        drizzled_template_header = fits.getheader(drizzled_template_filename, extname='SCI')
 
         if options['use_sep']:
             data, mask, drizzled_template_header = get_masked_data_for_sep(drizzled_template_filename)
@@ -170,7 +168,7 @@ def make_sep_catalog(data, header, options, mask=None, min_sep=10., do_bgsub=Fal
 
     flux, fluxerr, flag = sep.sum_ellipse(data_bgsub, sources['x'], sources['y'],
                                           sources['a'], sources['b'],
-                                          np.pi / 2.0, 2.5, # this was 2.5 * kronrad, but kronrad can't be nan
+                                          np.pi / 2.0, 2.5 * kronrad,
                                           subpix=1, err=error)
 
     t['mag'] = -2.5 * np.log10(flux)
@@ -197,7 +195,7 @@ def get_masked_data_for_sep(filename, bin_factor=32, thresh=0.7):
     j1 = (debinned.shape[1] - weight.shape[1]) // 2
 
     padded = np.pad(debinned, ((i0, -i1), (j0, -j1)), 'constant')
-    mask = padded < 0.7 * np.max(weight)
+    mask = padded < thresh * np.max(weight)
 
     return data, mask, header
 
@@ -256,7 +254,7 @@ def get_filter_name(image):
     else:
         try:
             f = fits.getval(image, 'FILTER')
-        except:
+        except KeyError:
             f = fits.getval(image, 'FILTER1')
             if 'clear' in f.lower():
                 f = fits.getval(image, 'FILTER2')
@@ -281,7 +279,7 @@ def get_default_reference_hst(visit_meta_data):
         if filt in visit_meta_data['filter']:
             visit = visit_meta_data[visit_meta_data['filter'] == filt][0]
             break
-    else: # choose the central filter
+    else:  # choose the central filter
         visit_meta_data.sort('filter')
         visit = visit_meta_data[len(visit_meta_data) // 2]
     return visit
@@ -289,9 +287,9 @@ def get_default_reference_hst(visit_meta_data):
 
 def get_target_coordinates(flt_file):
     hdulist = fits.open(flt_file)
-    RA = hdulist[0].header['RA_TARG']
-    Dec = hdulist[0].header['DEC_TARG']
-    return [RA, Dec]
+    ra = hdulist[0].header['RA_TARG']
+    dec = hdulist[0].header['DEC_TARG']
+    return [ra, dec]
 
 
 def sort_raw_data(images, min_visit_separation=0.2):
@@ -299,7 +297,7 @@ def sort_raw_data(images, min_visit_separation=0.2):
     metadata['filename'] = images
     metadata['expstart'] = [fits.getval(image, 'EXPSTART') for image in images]
     metadata['instrument'] = [fits_utils.get_instrument(image) for image in images]
-    metadata['visit'] = 'visit1' # initialize the column
+    metadata['visit'] = 'visit1'  # initialize the column
     metadata['filter'] = [get_filter_name(image) for image in images]
     metadata.sort('expstart')
     visit_starts, = np.where(np.diff(metadata['expstart']) > min_visit_separation)

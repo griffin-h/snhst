@@ -1,7 +1,6 @@
 import numpy as np
-from astropy import coordinates, units
+from astropy import coordinates
 from astropy import table
-from astropy import wcs
 from astropy.io import fits
 from scipy import optimize
 import logging
@@ -48,7 +47,7 @@ def read_catalog(catalog_filename):
 
 
 def apply_offsets(images, offset):
-    '''Update the raw hst frames with the calculated offset'''
+    """Update the raw hst frames with the calculated offset"""
     for image in images:
         hdulist = fits.open(image)
         for hdu in hdulist:
@@ -60,7 +59,7 @@ def apply_offsets(images, offset):
         logging.info('offset {} by {:.6f}, {:.6f} deg'.format(image, offset[0], offset[1]))
 
 
-def offset_to_match(images, hst_table, ref_table, n_stars=120, max_offset=0.1, origin=0):
+def offset_to_match(images, hst_table, ref_table, n_stars=120, max_offset=0.1):
 
     offsets = calculate_wcs_offset(hst_table, ref_table, n_stars, max_offset)
 

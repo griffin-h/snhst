@@ -1,6 +1,7 @@
 import shutil
 import os
 
+
 def copy_if_not_exists(filename, path):
     mkdir(path)
     copied_image = os.path.join(path, os.path.basename(filename))
@@ -11,6 +12,6 @@ def copy_if_not_exists(filename, path):
 
 
 def mkdir(path):
-    '''Makes a directory if it does not already exist. Equivalent to bash `mkdir -p`.'''
+    """Makes a directory if it does not already exist. Equivalent to bash `mkdir -p`."""
     if not os.path.exists(path):
         os.makedirs(path)

@@ -3,7 +3,7 @@ from snhst import fits_utils
 global_defaults = {
     'ground_reference': None,
     'ground_reference_catalog': None,
-    'refimage': None, # HST template
+    'refimage': None,  # HST template
     'ra': None,
     'dec': None,
     'use_tweakshifts': True,
@@ -50,7 +50,7 @@ global_defaults = {
         },
     'fakelist': {
         'filter1': None,
-        'filter2': None, # None = set based on data filters
+        'filter2': None,  # None = set based on data filters
         'filter1_min': 20.,
         'filter1_max': 30.,
         'color_min': 0.,
@@ -276,7 +276,7 @@ instrument_defaults = {
             'sigma_low': 2.25,
             'sigma_high': 2.00,
             },
-         'dolphot_img': {
+        'dolphot_img': {
             'apsky': '15 25',
             'RAper': 2,
             'RChi': 1.5,

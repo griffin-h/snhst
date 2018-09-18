@@ -20,10 +20,10 @@ def get_instrument(filename):
     return "{instrument}_{detector}_{subarray}".format(instrument=instrument, detector=detector,
                                                        subarray=subarray)
 
+
 def get_data_extension(filename):
-    '''Get the science hdu of an image (may be compressed)'''
+    """Get the science hdu of an image (may be compressed)"""
     reference_hdulist = fits.open(filename)
     for reference_hdu in reference_hdulist:
         if reference_hdu.header.get('NAXIS'):
-            break
-    return reference_hdu
+            return reference_hdu

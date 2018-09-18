@@ -42,7 +42,7 @@ def dolphot(template_image, images, path, options):
         run_dolphot(template_image, overlapping_images, path, options)
     output_table = parse_dolphot_table(dp_out, os.path.join(path, 'hst.cat'))
 
-    hdr = fits.get_header(template_image)
+    hdr = fits.getheader(template_image)
     output_table['ra'], output_table['dec'] = WCS(hdr).all_pix2world(output_table['x'], output_table['y'], 1)
 
     return output_table
@@ -115,7 +115,7 @@ def write_dolphot_master_parameters(file_object, options):
 
 
 def run_dolphot(template_image, images, path, options):
-    f = open(os.path.join(path, 'dp.params'),'w')
+    f = open(os.path.join(path, 'dp.params'), 'w')
     parameters.set_default_parameters(options['dolphot'], parameters.global_defaults['dolphot'])
     write_dolphot_master_parameters(f, options['dolphot'])
     f.write('Nimg = {n}\n'.format(n=len(images)))
@@ -153,7 +153,7 @@ def parse_dolphot_table(hst_table, output_catalog):
 def add_fake_stars(visit_meta_data, path, options):
     # find bluest and reddest filters
     filt_wl = np.array([re.search('[0-9]+', filt).group() for filt in visit_meta_data['filter']], float)
-    filt_wl[filt_wl < 200.] *= 10. # WFC3_IR filters are in different units
+    filt_wl[filt_wl < 200.] *= 10.  # WFC3_IR filters are in different units
     if options['filter1'] is None:
         bluest_row = visit_meta_data[np.argmin(filt_wl)]
         inst = bluest_row['instrument'].split('_')[0]
