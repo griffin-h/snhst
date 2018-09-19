@@ -16,6 +16,32 @@ import logging
 logging.basicConfig(level=logging.INFO)
 
 
+import matplotlib.pyplot as plt
+from astropy.visualization import ImageNormalize, PercentileInterval
+
+def make_cutouts(data, sepcat, refcat, n, size=50.):
+    norm = ImageNormalize(data, interval=PercentileInterval(99.), clip=True)
+    plt.figure()
+    plt.imshow(data, norm=norm, cmap='gray', origin='lower')
+    plt.plot(sepcat['x'], sepcat['y'], marker='+', mec='b', mfc='none', ls='none', ms=10, label='sep')
+    plt.plot(refcat['x'], refcat['y'], marker='+', mec='g', mfc='none', ls='none', ms=10, label='wcs')
+    plt.plot(refcat['xnew'], refcat['ynew'], marker='+', mec='r', mfc='none', ls='none', ms=10, label='shifted')
+    plt.legend()
+    for i, src in enumerate(sepcat):
+        plt.xlim(src['x'] - size, src['x'] + size)
+        plt.ylim(src['y'] - size, src['y'] + size)
+        plt.savefig('img{}src{:02d}'.format(n, i))
+    plt.close()
+
+    plt.figure(figsize=(10, 10))
+    plt.imshow(data, norm=norm, origin='lower')
+    plt.plot(sepcat['x'], sepcat['y'], marker='o', mec='r', mfc='none', ls='none', ms=10)
+    for i, src in enumerate(sepcat):
+        plt.text(src['x'], src['y'], str(i), fontsize=20)
+    plt.savefig('img{}'.format(n))
+    plt.close()
+
+
 def run(**options):
     '''Top level pipeline function to align and stack images and measure photometry.
 
@@ -55,7 +81,13 @@ def run(**options):
     visit_meta_data = sort_raw_data(raw_images)
     hst_reference = get_default_reference_hst(visit_meta_data)
     reference_path = os.path.join(hst_reference['instrument'], hst_reference['visit'], hst_reference['filter'])
-    images = get_raw_image_filenames(reference_path)
+    if options['use_existing_drc']:
+        images = glob(os.path.join(reference_path, '*_drc.fits'))
+        if len(images) != 1:
+            print(images)
+            raise Exception('unclear which drc file to use')
+    else:
+        images = get_raw_image_filenames(reference_path)
     hst_template_path = os.path.join(reference_path, 'hst_template')
     hst_template_images = [utils.copy_if_not_exists(image, hst_template_path) for image in images]
 
@@ -63,14 +95,15 @@ def run(**options):
     if options['ground_reference_catalog'] is not None or options['ground_reference'] is not None:
 
         match_template_path = os.path.join(reference_path, 'match_ground')
-        match_template_images = [utils.copy_if_not_exists(image, match_template_path) for image in images]
-
-        drizzled_template_filename = drizzle.drizzle(match_template_images, 'match_ground', options)
-        drizzled_template_header = fits.getheader(drizzled_template_filename, extname='SCI')
+        if options['use_existing_drc']:
+            drizzled_template_filename = utils.copy_if_not_exists(images[0], match_template_path)
+        else:
+            match_template_images = [utils.copy_if_not_exists(image, match_template_path) for image in images]
+            drizzled_template_filename = drizzle.drizzle(match_template_images, 'match_ground', options)
 
         if options['use_sep']:
             data, mask, drizzled_template_header = get_masked_data_for_sep(drizzled_template_filename)
-            drizzled_template_catalog = make_sep_catalog(data, drizzled_template_header, options, mask=mask)
+            drizzled_template_catalog = make_sep_catalog(data, drizzled_template_header, options, mask=mask, do_bgsub=not options['use_existing_drc'])
         else:
             dolphot_path = os.path.join(match_template_path, 'dolphot')
             drizzled_template_catalog = dolphot.dolphot(drizzled_template_filename, images, dolphot_path, options)
@@ -89,11 +122,14 @@ def run(**options):
         # (both catalogs are projected to the WCS of the drizzled template)
         wcs.offset_to_match(hst_template_images, drizzled_template_catalog, ground_reference_catalog, max_offset=2.)
 
-    hst_reference_filename = drizzle.drizzle(hst_template_images, 'hst_template', options)
+    if options['use_existing_drc']:
+        hst_reference_filename = hst_template_images[0]
+    else:
+        hst_reference_filename = drizzle.drizzle(hst_template_images, 'hst_template', options)
     options['refimage'] = hst_reference_filename + '[SCI]'
     if options['use_sep']:
         data, mask, hst_reference_header = get_masked_data_for_sep(hst_reference_filename)
-        hst_reference_catalog = make_sep_catalog(data, hst_reference_header, options, mask=mask)
+        hst_reference_catalog = make_sep_catalog(data, hst_reference_header, options, mask=mask, do_bgsub=not options['use_existing_drc'])
     else:
         dolphot_path = os.path.join(hst_template_path, 'dolphot')
         hst_reference_catalog = dolphot.dolphot(hst_reference_filename, images, dolphot_path, options)
@@ -104,12 +140,20 @@ def run(**options):
         visit_path = os.path.join(visit['instrument'], visit['visit'], visit['filter'])
         images = get_raw_image_filenames(visit_path)
         match_template_path = os.path.join(visit_path, 'match_template')
-        match_template_images = [utils.copy_if_not_exists(image, match_template_path) for image in images]
 
-        visit_template_filename = drizzle.drizzle(match_template_images, 'match_template', options)
+        if options['use_existing_drc']:
+            existing_drc_files = glob(os.path.join(visit_path, '*_drc.fits'))
+            if len(existing_drc_files) != 1:
+                print(existing_drc_files)
+                raise Exception('unclear which drc file to use')
+            visit_template_filename = utils.copy_if_not_exists(existing_drc_files[0], match_template_path)
+        else:
+            match_template_images = [utils.copy_if_not_exists(image, match_template_path) for image in images]
+            visit_template_filename = drizzle.drizzle(match_template_images, 'match_template', options)
+
         if options['use_sep']:
             data, mask, visit_template_header = get_masked_data_for_sep(visit_template_filename)
-            visit_template_catalog = make_sep_catalog(data, visit_template_header, options, mask=mask)
+            visit_template_catalog = make_sep_catalog(data, visit_template_header, options, mask=mask, do_bgsub=not options['use_existing_drc'])
         else:
             dolphot_path = os.path.join(match_template_path, 'dolphot')
             visit_template_catalog = dolphot.dolphot(visit_template_filename, images, dolphot_path, options)

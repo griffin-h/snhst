@@ -9,6 +9,7 @@ global_defaults = {
     'use_tweakshifts': True,
     'tweakshifts_threshold': 10,
     'use_sep': False,
+    'use_existing_drc': False,
     'dolphot': {
         'FitSky': 2,
         'SkipSky': 2,
