@@ -234,10 +234,10 @@ def copy_raw_data():
 
 
 def download_reference_images():
-    utils.mkdir('ref')
     os.environ['CRDS_SERVER_URL'] = 'https://hst-crds.stsci.edu'
     os.environ['CRDS_PATH'] = os.getcwd() + '/ref/'
     if not os.path.exists(os.environ['CRDS_PATH']):
+        utils.mkdir(os.environ['CRDS_PATH'])
         if glob('*flc.fits'):
             os.system('python -m crds.bestrefs --update-bestrefs --sync-references=1 --files *flc.fits')
         if glob('*flt.fits'):
