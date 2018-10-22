@@ -9,6 +9,7 @@ dependencies:
     - matplotlib
     - astropy
     - scipy
+    - scikit-image # astropy.nddata needs this
     # from STSci:
     - drizzlepac
     - reproject
