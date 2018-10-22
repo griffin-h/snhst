@@ -115,8 +115,9 @@ def run(**options):
         hst_template_images = [utils.copy_if_not_exists(image, hst_template_path) for image in images]
 
         wcs.offset_to_match(hst_template_images, visit_template_catalog, hst_reference_catalog, max_offset=2.)
-        visit_template_filename = drizzle.drizzle(hst_template_images, '_'.join(visit['visit', 'filter']), options)
-        utils.copy_if_not_exists(visit_template_filename, 'final')
+        if options['make_visit_templates']:
+            visit_template_filename = drizzle.drizzle(hst_template_images, '_'.join(visit['visit', 'filter']), options)
+            utils.copy_if_not_exists(visit_template_filename, 'final')
 
         offset_images_by_filter[visit['filter']] += hst_template_images
 

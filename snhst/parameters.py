@@ -8,6 +8,7 @@ global_defaults = {
     'use_tweakshifts': True,
     'tweakshifts_threshold': 10,
     'use_sep': False,
+    'make_visit_templates': True,
     'dolphot': {
         'FitSky': 2,
         'SkipSky': 2,
