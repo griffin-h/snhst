@@ -49,7 +49,8 @@ def run_astrodrizzle(input_files, drizzle_options):
 
     # These parameters were either set by default or passed in by the user
     for key in ['output', 'final_pixfrac', 'clean', 'num_cores', 'skysub']:
-        input_dict[key] = drizzle_options.get(key)
+        if key in drizzle_options:
+            input_dict[key] = drizzle_options[key]
 
     if 'refimage' in drizzle_options:
         driz_opts_to_include = ['bits', 'refimage']
@@ -57,8 +58,9 @@ def run_astrodrizzle(input_files, drizzle_options):
         driz_opts_to_include = ['bits', 'rot', 'scale', 'outnx', 'outny', 'ra', 'dec']
 
     for key in driz_opts_to_include:
-        input_dict['driz_sep_' + key] = drizzle_options[key]
-        input_dict['final_' + key] = drizzle_options[key]
+        if key in drizzle_options:
+            input_dict['driz_sep_' + key] = drizzle_options[key]
+            input_dict['final_' + key] = drizzle_options[key]
 
     astrodrizzle.AstroDrizzle(input_files, **input_dict)
 
@@ -71,13 +73,10 @@ def run_astrodrizzle(input_files, drizzle_options):
 
     sci_hdu = fits.open(output_filename)
     sci_data = sci_hdu['SCI'].data
-    if drizzle_options['skysub']:
-        mdrizsky = np.min(sci_data[sci_data > -49999.0])
-    else:
-        mdrizsky = 0.0
-    sci_data[sci_data > -49999.0] -= mdrizsky
-    no_data = sci_data < -49999.0
-    sci_data[no_data] = 0.0
+    mask = sci_data <= input_dict['final_fillval']
+    if drizzle_options.get('skysub') in [True, None]:
+        sci_data[~mask] -= np.min(sci_data[~mask])
+    sci_data[mask] = 0.0
 
     sci_hdu.writeto(output_filename, overwrite=True)
 

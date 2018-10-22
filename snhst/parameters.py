@@ -3,7 +3,6 @@ from snhst import fits_utils
 global_defaults = {
     'ground_reference': None,
     'ground_reference_catalog': None,
-    'refimage': None,  # HST template
     'ra': None,
     'dec': None,
     'use_tweakshifts': True,
@@ -64,14 +63,7 @@ instrument_defaults = {
         'input_files': '*_flc.fits',
         'drizzle': {
             'rot': 0.,
-            'final_pixfrac': 1.,
             'clean': True,
-            'num_cores': 8,
-            'skysub': True,
-            'outnx': 5200,
-            'outny': 5200,
-            'bits': 0,
-            'scale': 0.04,
             'crpars': {
                 'rdnoise': 6.5,
                 'gain': 1.0,
@@ -101,14 +93,7 @@ instrument_defaults = {
         'input_files': '*_flt.fits',
         'drizzle': {
             'rot': 0.,
-            'final_pixfrac': 1.,
             'clean': True,
-            'num_cores': 8,
-            'skysub': True,
-            'outnx': 1400,
-            'outny': 1400,
-            'bits': 0,
-            'scale': 0.04,
             'crpars': {
                 'rdnoise': 6.5,
                 'gain': 1.0,
@@ -140,14 +125,7 @@ instrument_defaults = {
         'input_files': '*_flt.fits',
         'drizzle': {
             'rot': 0.,
-            'final_pixfrac': 1.,
             'clean': True,
-            'num_cores': 8,
-            'skysub': True,
-            'outnx': 1700,
-            'outny': 1700,
-            'bits': 512,
-            'scale': 0.09,
             'crpars': {
                 'rdnoise': 6.5,
                 'gain': 1.0,
@@ -178,14 +156,7 @@ instrument_defaults = {
         'input_files': '*_flc.fits',
         'drizzle': {
             'rot': 0.,
-            'final_pixfrac': 1.,
             'clean': True,
-            'num_cores': 8,
-            'skysub': True,
-            'outnx': 5200,
-            'outny': 5200,
-            'bits': 0,
-            'scale': 0.05,
             'crpars': {
                 'rdnoise': 6.5,
                 'gain': 1.0,
@@ -215,14 +186,7 @@ instrument_defaults = {
         'input_files': '*_flt.fits',
         'drizzle': {
             'rot': 0.,
-            'final_pixfrac': 1.,
             'clean': True,
-            'num_cores': 8,
-            'skysub': True,
-            'outnx': 1400,
-            'outny': 1400,
-            'bits': 0,
-            'scale': 0.05,
             'crpars': {
                 'rdnoise': 6.5,
                 'gain': 1.0,
@@ -252,14 +216,7 @@ instrument_defaults = {
         'input_files': '*_c0m.fits',
         'drizzle': {
             'rot': 0.,
-            'final_pixfrac': 1.,
             'clean': True,
-            'num_cores': 8,
-            'skysub': True,
-            'outnx': 5200,
-            'outny': 5200,
-            'bits': 0,
-            'scale': 0.046,
             'crpars': {
                 'rdnoise': 10.0,
                 'gain': 7.0,

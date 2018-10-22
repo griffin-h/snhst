@@ -88,7 +88,6 @@ def run(**options):
         wcs.offset_to_match(hst_template_images, drizzled_template_catalog, ground_reference_catalog, max_offset=2.)
 
     hst_reference_filename = drizzle.drizzle(hst_template_images, 'hst_template', options)
-    options['refimage'] = hst_reference_filename + '[SCI]'
     if options['use_sep']:
         data, mask, hst_reference_header = get_masked_data_for_sep(hst_reference_filename)
         hst_reference_catalog = make_sep_catalog(data, hst_reference_header, options, mask=mask)
